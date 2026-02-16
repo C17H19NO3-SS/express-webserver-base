@@ -25,14 +25,13 @@ export function Serve(htmlPath: string): MethodDecorator {
         }
 
         // Check if Tailwind is enabled for the controller
-        const enableTailwind =
-          Reflect.getMetadata(TAILWIND_METADATA_KEY, target.constructor) ||
-          false;
+        const tailwindOptions =
+          Reflect.getMetadata(TAILWIND_METADATA_KEY, target.constructor) || {};
 
         // If no response, build and serve the HTML
         const html = await ServeMemoryStore.instance.buildAndCache(
           htmlPath,
-          enableTailwind,
+          tailwindOptions,
         );
         if (html) {
           res.type("html").send(html);

@@ -21,6 +21,14 @@ import {
   PUBLIC_METADATA_KEY,
   type AuthInfo,
 } from "../Decorations/Authorized";
+import {
+  SECURITY_METADATA_KEY,
+  type SecurityRequirement,
+} from "../Decorations/Security";
+import {
+  TAILWIND_METADATA_KEY,
+  type TailwindOptions,
+} from "../Decorations/Tailwind";
 import { ServeMemoryStore } from "./ServeMemoryStore";
 import boxen from "boxen";
 import pc from "picocolors";
@@ -31,7 +39,9 @@ export class Server {
   private readonly _controllersDir: string;
   public readonly _id: string;
   private readonly _enableSwagger: boolean;
+  private readonly _swaggerPath: string;
   private readonly _enableLogging: boolean;
+  private readonly _securitySchemes?: any;
   private readonly _ajv: Ajv;
   private readonly _securityHandlers: Record<
     string,
@@ -39,16 +49,22 @@ export class Server {
   >;
   private readonly _container?: { get: (target: any) => any };
   private _serverInstance?: HttpServer;
+  // Stats
+  private _controllerCount = 0;
+  private _routeCount = 0;
+  private _tailwindEnabled = false;
 
   constructor(options: ServerOptions) {
     this._port = options.port;
     this._app = express();
     this._id = options.id;
     this._enableSwagger = options.enableSwagger || false;
+    this._swaggerPath = options.swaggerPath || "/api-docs";
     this._enableLogging =
       options.logging === undefined ? true : options.logging;
     this._controllersDir = options.controllersDir || "controllers";
     this._securityHandlers = options.securityHandlers || {};
+    this._securitySchemes = options.securitySchemes;
     this._container = options.container;
 
     // Initialize AJV
@@ -109,21 +125,32 @@ export class Server {
     );
 
     this._serverInstance = this._app.listen(this._port, () => {
-      this.printStartupMessage();
+      if (this._enableLogging) {
+        this.printStartupMessage();
+      }
     });
   }
 
   private printStartupMessage() {
+    const pad = (str: string) => str.padEnd(15);
+
     const lines = [
       pc.green(`Server '${this._id}' is running!`),
       "",
-      `${pc.bold("Port:")}       ${this._port}`,
-      `${pc.bold("PID:")}        ${process.pid}`,
+      `${pc.bold(pad("Port:"))}${this._port}`,
+      `${pc.bold(pad("PID:"))}${process.pid}`,
+      `${pc.bold(pad("Controllers:"))}${this._controllerCount}`,
+      `${pc.bold(pad("Routes:"))}${this._routeCount}`,
+      `${pc.bold(pad("Tailwind:"))}${
+        this._tailwindEnabled ? pc.blue("Enabled") : pc.dim("Disabled")
+      }`,
     ];
 
     if (this._enableSwagger) {
       lines.push(
-        `${pc.bold("Swagger:")}    http://localhost:${this._port}/api-docs`,
+        `${pc.bold(pad("Swagger:"))}http://localhost:${this._port}${
+          this._swaggerPath
+        }`,
       );
     }
 
@@ -175,6 +202,17 @@ export class Server {
     for (const controller of controllers) {
       if (controller.serverIds && !controller.serverIds.includes(this._id)) {
         continue;
+      }
+
+      this._controllerCount++;
+
+      // Check for Tailwind metadata
+      const tailwindOptions: TailwindOptions | undefined = Reflect.getMetadata(
+        TAILWIND_METADATA_KEY,
+        controller.target,
+      );
+      if (tailwindOptions?.enable) {
+        this._tailwindEnabled = true;
       }
 
       const instance = this._container?.get
@@ -248,18 +286,85 @@ export class Server {
           }
         }
 
-        // 1. Auth Middleware (Old logic - support existing manual config)
-        const methodSecurity = route.swagger?.security;
-        const controllerSecurity = controller.security;
-        // Combine security requirements
-        const securityRequirements = [
-          ...(methodSecurity || []),
-          ...(controllerSecurity || []),
+        // 2. Generic Security Middleware (@Security, @OAuth, etc)
+        const classGenericSecurity: SecurityRequirement[] =
+          Reflect.getMetadata(SECURITY_METADATA_KEY, controller.target) || [];
+        const methodGenericSecurity: SecurityRequirement[] =
+          Reflect.getMetadata(
+            SECURITY_METADATA_KEY,
+            controller.target.prototype,
+            route.handlerName,
+          ) || [];
+
+        let genericRequirements: SecurityRequirement[] = [];
+
+        if (isPublic) {
+          // If public, we might want to skip class generic security too?
+          // Usually yes.
+          genericRequirements = [...methodGenericSecurity];
+        } else {
+          genericRequirements = [
+            ...classGenericSecurity,
+            ...methodGenericSecurity,
+          ];
+        }
+
+        // Add to Swagger
+        if (genericRequirements.length > 0) {
+          if (!route.swagger) {
+            route.swagger = {
+              responses: {
+                200: { description: "Default response" },
+              },
+            };
+          }
+          if (!route.swagger.security) {
+            route.swagger.security = [];
+          }
+          route.swagger.security.push(...genericRequirements);
+        }
+
+        // 3. Auth Middleware (Old logic - support existing manual config + generic)
+        const manualRequirements = [
+          ...(route.swagger?.security || []),
+          ...(controller.security || []),
         ];
 
-        if (securityRequirements.length > 0) {
-          middlewares.push(this.createAuthMiddleware(securityRequirements));
+        // We already pushed genericRequirements to route.swagger.security, so manualRequirements includes them?
+        // Wait, route.swagger.security is updated above.
+        // So manualRequirements now has everything including bearerAuth (pushed above) and generic (pushed above).
+        // BUT, controller.security (from @Controller options) might duplicate classGenericSecurity?
+        // Let's rely on route.swagger.security + controller.security.
+        // And we should filter out duplicates if necessary, but Swagger UI handles it usually (OR logic between items in array).
+        // Actually, genericRequirements are added to route.swagger.security.
+        // So we can just use route.swagger.security.
+        // However, controller.security is separate.
+
+        const allSecurityRequirements = [
+          ...(route.swagger?.security || []),
+          ...(controller.security || []),
+        ];
+
+        // Filter out bearerAuth if handled by createJwtMiddleware (to avoid double check if handler is missing)
+        // createJwtMiddleware handles 'bearerAuth'.
+        // createAuthMiddleware handles everything else via securityHandlers.
+        // If we have 'bearerAuth' in requirements, createAuthMiddleware will look for a handler for 'bearerAuth'.
+        // If user didn't provide one, it warns.
+        // We should probably allow 'bearerAuth' in createAuthMiddleware IF user provided a handler.
+        // But we added createJwtMiddleware explicitly.
+        // So we should filter 'bearerAuth' out of requirements passed to createAuthMiddleware UNLESS user provided a handler for it?
+        // Or just let it run. If user provides handler, it runs twice?
+        // createJwtMiddleware is added if `authSecret` is true (from @BearerAuth).
+        // If `bearerAuth` is in swagger because of @BearerAuth, we risk running twice if user adds handler.
+        // But `@BearerAuth` logic uses `createJwtMiddleware`.
+        // The `genericRequirements` logic adds to swagger.
+        // Let's assume standard usage: use @BearerAuth OR @Security("bearerAuth"). Not both.
+
+        if (allSecurityRequirements.length > 0) {
+          middlewares.push(this.createAuthMiddleware(allSecurityRequirements));
         }
+
+        // 4. Validation Middleware
 
         // 2. Validation Middleware
         if (
@@ -309,6 +414,7 @@ export class Server {
         };
 
         (this._app as any)[route.method](fullPath, ...middlewares, handler);
+        this._routeCount++;
       }
     }
   }
@@ -461,6 +567,7 @@ export class Server {
               scheme: "bearer",
               bearerFormat: "JWT",
             },
+            ...this._securitySchemes,
           },
         },
       },
@@ -468,13 +575,14 @@ export class Server {
     };
 
     const specs = swaggerJsdoc(options);
-    this._app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(specs));
+    this._app.use(this._swaggerPath, swaggerUi.serve, swaggerUi.setup(specs));
   }
 }
 
 export interface ServerOptions {
   port: number;
   enableSwagger?: boolean;
+  swaggerPath?: string;
   logging?: boolean;
   id: string;
   controllersDir?: string;
@@ -485,5 +593,6 @@ export interface ServerOptions {
     string,
     (req: Request, res: Response, next: NextFunction) => void
   >;
+  securitySchemes?: Record<string, any>;
   container?: { get: (target: any) => any };
 }

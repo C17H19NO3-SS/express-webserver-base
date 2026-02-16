@@ -1,4 +1,5 @@
 import tailwindPlugin from "bun-plugin-tailwind";
+import type { TailwindOptions } from "../Decorations/Tailwind";
 
 export class ServeMemoryStore {
   private static _instance: ServeMemoryStore;
@@ -23,21 +24,30 @@ export class ServeMemoryStore {
 
   public async buildAndCache(
     htmlPath: string,
-    enableTailwind = false,
+    options: TailwindOptions = { enable: false, plugins: [] },
   ): Promise<string> {
-    const cacheKey = htmlPath + (enableTailwind ? ":tw" : "");
+    const cacheKey =
+      htmlPath +
+      (options.enable ? ":tw" : "") +
+      (options.plugins ? ":" + options.plugins.length : "");
     if (this._htmlCache.has(cacheKey)) {
       return this._htmlCache.get(cacheKey)!;
     }
 
     try {
+      const plugins = [...(options.plugins || [])];
+
+      if (options.enable) {
+        plugins.push(tailwindPlugin);
+      }
+
       const build = await Bun.build({
         entrypoints: [htmlPath],
         target: "browser",
         minify: true,
         naming: "[name]-[hash].[ext]", // Ensure unique names
         publicPath: "/", // Assets served from root
-        plugins: [tailwindPlugin],
+        plugins: plugins,
       });
 
       if (!build.success) {

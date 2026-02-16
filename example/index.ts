@@ -15,6 +15,15 @@ const bearerAuth = (req: Request, res: Response, next: NextFunction) => {
   next();
 };
 
+const oauthHandler = (req: Request, res: Response, next: NextFunction) => {
+  const authHeader = req.headers.authorization;
+  if (authHeader === "Bearer oauth-token") {
+    (req as any).user = { id: "oauth-user", scope: "read" };
+    return next();
+  }
+  res.status(401).json({ error: "OAuth Unauthorized" });
+};
+
 const server = new Server({
   port: 3000,
   id: "main",
@@ -22,6 +31,22 @@ const server = new Server({
   enableSwagger: true,
   securityHandlers: {
     bearerAuth: bearerAuth,
+    oauth2: oauthHandler,
+  },
+  swaggerPath: "/docs",
+  securitySchemes: {
+    oauth2: {
+      type: "oauth2",
+      flows: {
+        implicit: {
+          authorizationUrl: "https://example.com/api/oauth/dialog",
+          scopes: {
+            "read:profile": "read your profile",
+            "write:profile": "modify your profile",
+          },
+        },
+      },
+    },
   },
 });
 

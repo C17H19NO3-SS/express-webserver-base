@@ -4,6 +4,7 @@ import { BearerAuth, Public } from "../../src/Decorations/Authorized";
 import type { Request, Response } from "express";
 import { Serve } from "../../src/Decorations/Serve";
 import { Tailwindcss } from "../../src/Decorations/Tailwind";
+import { OAuth } from "../../src/Decorations/Security";
 
 @Controller("", { tags: ["Example"] })
 @BearerAuth()
@@ -90,5 +91,19 @@ export class ExampleController {
   })
   public secure(req: Request, res: Response) {
     return { message: "This is a secure data", user: (req as any).user };
+  }
+
+  @Get("/oauth", {
+    summary: "OAuth protected endpoint",
+    description: "Requires a valid OAuth2 token with 'read:profile' scope.",
+    responses: {
+      200: {
+        description: "Access granted via OAuth.",
+      },
+    },
+  })
+  @OAuth(["read:profile"])
+  public oauth(req: Request, res: Response) {
+    return { message: "OAuth Success", user: (req as any).user };
   }
 }

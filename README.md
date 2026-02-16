@@ -61,8 +61,21 @@ server.init();
 Run with Bun:
 
 ```bash
-bun run index.ts
+    bun run index.ts
 ```
+
+### 3. Customize Swagger Path
+
+You can change where Swagger UI is served:
+
+````typescript
+    const server = new Server({
+      id: "main",
+      port: 3000,
+      enableSwagger: true,
+      swaggerPath: "/docs", // Now available at http://localhost:3000/docs
+    });
+    ```
 
 ## Detailed Usage
 
@@ -93,7 +106,7 @@ export class UserController {
     return { id: 1, ...req.body };
   }
 }
-```
+````
 
 ### Authentication
 
@@ -103,7 +116,7 @@ Secure your endpoints using `@BearerAuth`. It integrates with JWT verification a
 - **Method Level:** Protects specific routes.
 - **@Public():** Excludes a route from class-level auth.
 
-```typescript
+````typescript
 import { Controller, Get, BearerAuth, Public } from "ewb";
 
 @Controller("/secure")
@@ -116,13 +129,56 @@ export class SecureController {
     return { message: "Secret data", user };
   }
 
-  @Get("/status")
-  @Public() // Accessible without token
-  public status(req: Request, res: Response) {
-    return { status: "OK" };
-  }
-}
-```
+      @Get("/status")
+      @Public() // Accessible without token
+      public status(req: Request, res: Response) {
+        return { status: "OK" };
+      }
+    }
+    ```
+
+    #### Advanced Security (@Security, @OAuth, @ApiKey)
+
+    For other authentication methods like OAuth2 or API Keys, use generic decorators:
+
+    ```typescript
+    import { Controller, Get, OAuth, ApiKey } from "ewb";
+
+    @Controller("/api")
+    export class ApiController {
+      @Get("/profile")
+      @OAuth(["read:profile"]) // Marks route as requiring OAuth2 with specific scope
+      public getProfile() {
+        return { name: "John Doe" };
+      }
+
+      @Get("/data")
+      @ApiKey("X-API-KEY") // Custom security scheme name
+      public getData() {
+        return { sensitive: "data" };
+      }
+    }
+    ```
+
+    **Configure Handlers and Schemes:**
+
+    ```typescript
+    const server = new Server({
+      // ...,
+      securitySchemes: {
+        oauth2: {
+          type: "oauth2",
+          flows: { /* ... standard OpenAPI flow definition ... */ }
+        }
+      },
+      securityHandlers: {
+        oauth2: (req, res, next) => {
+          // Your OAuth validation logic here
+          next();
+        }
+      }
+    });
+    ```
 
 ### Request Validation
 
@@ -151,7 +207,7 @@ public register(req: Request, res: Response) {
   // If execution reaches here, req.body is valid
   return { success: true };
 }
-```
+````
 
 ### Serving Frontend Assets (with Tailwind CSS)
 
@@ -169,20 +225,20 @@ You can serve compiled HTML and automatically process Tailwind CSS using the `@S
 
 2.  **Controller Setup**:
 
-```typescript
-import { Controller, Get, Serve, Tailwindcss } from "ewb";
-
-@Controller("/")
-@Tailwindcss() // Enables Tailwind CSS processing for assets served by this controller
-export class FrontendController {
-  @Get("/")
-  @Serve("views/src/index.html") // Path to your HTML entry point
-  public app(req: Request, res: Response) {
-    // The decorator handles the response.
-    // The method body is intentionally empty or ignored if asset is found.
-  }
-}
-```
+````typescript
+    @Controller("/")
+    @Tailwindcss({
+      enable: true,
+      plugins: [ /* Bun plugins or custom PostCSS wrappers */ ]
+    })
+    export class FrontendController {
+      @Get("/")
+      @Serve("views/src/index.html") // Path to your HTML entry point
+      public app(req: Request, res: Response) {
+        // The decorator handles the response.
+      }
+    }
+    ```
 
 ### Middleware
 
@@ -204,7 +260,7 @@ export class AuditController {
     return { message: "Audited" };
   }
 }
-```
+````
 
 ## Server Configuration
 
@@ -215,11 +271,14 @@ The `Server` class accepts the following options:
 | `id`               | `string`        | Unique identifier for the server instance.                       |
 | `port`             | `number`        | Port to listen on.                                               |
 | `controllersDir`   | `string`        | Directory containing controller files.                           |
-| `enableSwagger`    | `boolean`       | Enable OpenAPI documentation at `/api-docs`.                     |
-| `logging`          | `boolean`       | Enable/disable console logging (defaults to true).               |
+| `enableSwagger`    | `boolean`       | Enable OpenAPI documentation.                                    |
+| `swaggerPath`      | `string`        | Custom path for Swagger UI (default: `/api-docs`).               |
+| `logging`          | `boolean`       | Enable/disable TUI startup messages (default: true).             |
 | `corsOptions`      | `CorsOptions`   | Configuration for CORS.                                          |
 | `helmetOptions`    | `HelmetOptions` | Configuration for Helmet security headers.                       |
 | `rateLimitOptions` | `any`           | Configuration for rate limiting.                                 |
+| `securitySchemes`  | `object`        | custom OpenAPI security schemes definitions.                     |
+| `securityHandlers` | `object`        | Middleware handlers for security schemes.                        |
 | `container`        | `object`        | IoC container for dependency injection (must have `get` method). |
 
 ## License
