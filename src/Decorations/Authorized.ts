@@ -8,10 +8,10 @@ export interface AuthInfo {
   secret?: string;
 }
 
-export function BearerAuth(secret?: string): Function {
+export function BearerAuth(secret?: string): MethodDecorator & ClassDecorator {
   return function (
     target: any,
-    propertyKey?: string,
+    propertyKey?: string | symbol,
     descriptor?: PropertyDescriptor,
   ) {
     // If used on a method

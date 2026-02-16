@@ -29,3 +29,6 @@ export function Use(...middlewares: RequestHandler[]) {
     }
   };
 }
+export function Middleware(...middlewares: RequestHandler[]) {
+  return Use(...middlewares);
+}
