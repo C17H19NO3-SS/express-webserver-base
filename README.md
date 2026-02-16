@@ -1,4 +1,4 @@
-# ewb
+# ewb-server
 
 A robust, decorator-based web server framework built on top of **Express** and optimized for **Bun**. It provides a structured way to build scalable APIs with built-in support for **OpenAPI (Swagger)**, **Validation**, **Authentication**, and **Frontend Asset Serving** (with Tailwind CSS support).
 
@@ -16,7 +16,7 @@ A robust, decorator-based web server framework built on top of **Express** and o
 ## Installation
 
 ```bash
-bun add ewb
+bun add ewb-server
 ```
 
 ## Quick Start
@@ -36,7 +36,7 @@ export class HomeController {
     description: "Returns a welcome message.",
   })
   public index(req: Request, res: Response) {
-    return { message: "Hello from ewb!" };
+    return { message: "Hello from ewb-server!" };
   }
 }
 ```
