@@ -31,6 +31,7 @@ import {
   TAILWIND_METADATA_KEY,
   type TailwindOptions,
 } from "../Decorations/Tailwind";
+import { SERVE_HTML_METADATA_KEY } from "../Decorations/Serve";
 import { ServeMemoryStore } from "./ServeMemoryStore";
 import boxen from "boxen";
 import pc from "picocolors";
@@ -55,6 +56,8 @@ export class Server {
   private _controllerCount = 0;
   private _routeCount = 0;
   private _tailwindEnabled = false;
+  private _devMode = false;
+  private _sseClients: Response[] = [];
 
   constructor(options: ServerOptions) {
     this._port = options.port;
@@ -87,7 +90,37 @@ export class Server {
 
     this._app.use(express.json());
 
+    this._devMode = options.devMode ?? process.env.NODE_ENV === "development";
+    if (this._devMode) {
+      this.setupHmr();
+    }
+
     global.servers.set(this._id, this._app);
+  }
+
+  private setupHmr() {
+    ServeMemoryStore.instance.setDevMode(true);
+    ServeMemoryStore.instance.onRebuild(() => {
+      this.log(
+        `[${this._id}] Sending reload signal to ${this._sseClients.length} clients`,
+      );
+      this._sseClients.forEach((res) => {
+        res.write("data: reload\n\n");
+      });
+    });
+
+    this._app.get("/ebw-hmr", (req, res) => {
+      res.setHeader("Content-Type", "text/event-stream");
+      res.setHeader("Cache-Control", "no-cache");
+      res.setHeader("Connection", "keep-alive");
+      res.flushHeaders();
+
+      this._sseClients.push(res);
+
+      req.on("close", () => {
+        this._sseClients = this._sseClients.filter((c) => c !== res);
+      });
+    });
   }
 
   private log(message: string): void {
@@ -145,6 +178,9 @@ export class Server {
       `${pc.bold(pad("Routes:"))}${this._routeCount}`,
       `${pc.bold(pad("Tailwind:"))}${
         this._tailwindEnabled ? pc.blue("Enabled") : pc.dim("Disabled")
+      }`,
+      `${pc.bold(pad("HMR:"))}${
+        this._devMode ? pc.cyan("Active") : pc.dim("Inactive")
       }`,
     ];
 
@@ -417,6 +453,20 @@ export class Server {
 
         (this._app as any)[route.method](fullPath, ...middlewares, handler);
         this._routeCount++;
+
+        // Pre-build if @Serve is used
+        const htmlPath = Reflect.getMetadata(
+          SERVE_HTML_METADATA_KEY,
+          controller.target.prototype,
+          route.handlerName,
+        );
+        if (htmlPath) {
+          this.log(`[${this._id}] Pre-building HTML: ${htmlPath}`);
+          await ServeMemoryStore.instance.buildAndCache(
+            htmlPath,
+            tailwindOptions,
+          );
+        }
       }
     }
   }
@@ -588,6 +638,7 @@ export interface ServerOptions {
   logging?: boolean;
   id: string;
   controllersDir?: string;
+  devMode?: boolean;
   corsOptions?: cors.CorsOptions;
   helmetOptions?: HelmetOptions;
   rateLimitOptions?: Partial<RateLimitOptions>;

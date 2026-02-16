@@ -29,6 +29,7 @@ const server = new Server({
   id: "main",
   controllersDir: "example/controllers",
   enableSwagger: true,
+  devMode: true,
   securityHandlers: {
     bearerAuth: bearerAuth,
     oauth2: oauthHandler,

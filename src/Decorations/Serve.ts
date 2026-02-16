@@ -2,12 +2,22 @@ import type { Request, Response, NextFunction } from "express";
 import { ServeMemoryStore } from "../Components/ServeMemoryStore";
 import { TAILWIND_METADATA_KEY } from "./Tailwind";
 
+export const SERVE_HTML_METADATA_KEY = "serve:html";
+
 export function Serve(htmlPath: string): MethodDecorator {
   return function (
     target: any,
     propertyKey: string | symbol,
     descriptor: PropertyDescriptor,
   ) {
+    // Store the HTML path in metadata for pre-building
+    Reflect.defineMetadata(
+      SERVE_HTML_METADATA_KEY,
+      htmlPath,
+      target,
+      propertyKey,
+    );
+
     const originalMethod = descriptor.value;
 
     descriptor.value = async function (
