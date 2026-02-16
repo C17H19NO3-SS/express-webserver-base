@@ -61,21 +61,21 @@ server.init();
 Run with Bun:
 
 ```bash
-    bun run index.ts
+bun run index.ts
 ```
 
 ### 3. Customize Swagger Path
 
 You can change where Swagger UI is served:
 
-````typescript
-    const server = new Server({
-      id: "main",
-      port: 3000,
-      enableSwagger: true,
-      swaggerPath: "/docs", // Now available at http://localhost:3000/docs
-    });
-    ```
+```typescript
+const server = new Server({
+  id: "main",
+  port: 3000,
+  enableSwagger: true,
+  swaggerPath: "/docs", // Now available at http://localhost:3000/docs
+});
+```
 
 ## Detailed Usage
 
@@ -106,7 +106,7 @@ export class UserController {
     return { id: 1, ...req.body };
   }
 }
-````
+```
 
 ### Authentication
 
@@ -116,7 +116,7 @@ Secure your endpoints using `@BearerAuth`. It integrates with JWT verification a
 - **Method Level:** Protects specific routes.
 - **@Public():** Excludes a route from class-level auth.
 
-````typescript
+```typescript
 import { Controller, Get, BearerAuth, Public } from "ewb";
 
 @Controller("/secure")
@@ -129,56 +129,58 @@ export class SecureController {
     return { message: "Secret data", user };
   }
 
-      @Get("/status")
-      @Public() // Accessible without token
-      public status(req: Request, res: Response) {
-        return { status: "OK" };
-      }
-    }
-    ```
+  @Get("/status")
+  @Public() // Accessible without token
+  public status(req: Request, res: Response) {
+    return { status: "OK" };
+  }
+}
+```
 
-    #### Advanced Security (@Security, @OAuth, @ApiKey)
+#### Advanced Security (@Security, @OAuth, @ApiKey)
 
-    For other authentication methods like OAuth2 or API Keys, use generic decorators:
+For other authentication methods like OAuth2 or API Keys, use generic decorators:
 
-    ```typescript
-    import { Controller, Get, OAuth, ApiKey } from "ewb";
+```typescript
+import { Controller, Get, OAuth, ApiKey } from "ewb";
 
-    @Controller("/api")
-    export class ApiController {
-      @Get("/profile")
-      @OAuth(["read:profile"]) // Marks route as requiring OAuth2 with specific scope
-      public getProfile() {
-        return { name: "John Doe" };
-      }
+@Controller("/api")
+export class ApiController {
+  @Get("/profile")
+  @OAuth(["read:profile"]) // Marks route as requiring OAuth2 with specific scope
+  public getProfile() {
+    return { name: "John Doe" };
+  }
 
-      @Get("/data")
-      @ApiKey("X-API-KEY") // Custom security scheme name
-      public getData() {
-        return { sensitive: "data" };
-      }
-    }
-    ```
+  @Get("/data")
+  @ApiKey("X-API-KEY") // Custom security scheme name
+  public getData() {
+    return { sensitive: "data" };
+  }
+}
+```
 
-    **Configure Handlers and Schemes:**
+**Configure Handlers and Schemes:**
 
-    ```typescript
-    const server = new Server({
-      // ...,
-      securitySchemes: {
-        oauth2: {
-          type: "oauth2",
-          flows: { /* ... standard OpenAPI flow definition ... */ }
-        }
+```typescript
+const server = new Server({
+  // ...,
+  securitySchemes: {
+    oauth2: {
+      type: "oauth2",
+      flows: {
+        /* ... standard OpenAPI flow definition ... */
       },
-      securityHandlers: {
-        oauth2: (req, res, next) => {
-          // Your OAuth validation logic here
-          next();
-        }
-      }
-    });
-    ```
+    },
+  },
+  securityHandlers: {
+    oauth2: (req, res, next) => {
+      // Your OAuth validation logic here
+      next();
+    },
+  },
+});
+```
 
 ### Request Validation
 
@@ -207,7 +209,7 @@ public register(req: Request, res: Response) {
   // If execution reaches here, req.body is valid
   return { success: true };
 }
-````
+```
 
 ### Serving Frontend Assets (with Tailwind CSS)
 
@@ -225,20 +227,24 @@ You can serve compiled HTML and automatically process Tailwind CSS using the `@S
 
 2.  **Controller Setup**:
 
-````typescript
-    @Controller("/")
-    @Tailwindcss({
-      enable: true,
-      plugins: [ /* Bun plugins or custom PostCSS wrappers */ ]
-    })
-    export class FrontendController {
-      @Get("/")
-      @Serve("views/src/index.html") // Path to your HTML entry point
-      public app(req: Request, res: Response) {
-        // The decorator handles the response.
-      }
-    }
-    ```
+```typescript
+import { Controller, Get, Serve, Tailwindcss } from "ewb";
+
+@Controller("/")
+@Tailwindcss({
+  enable: true,
+  plugins: [
+    /* Bun plugins or custom PostCSS wrappers */
+  ],
+})
+export class FrontendController {
+  @Get("/")
+  @Serve("views/src/index.html") // Path to your HTML entry point
+  public app(req: Request, res: Response) {
+    // The decorator handles the response.
+  }
+}
+```
 
 ### Middleware
 
@@ -260,7 +266,7 @@ export class AuditController {
     return { message: "Audited" };
   }
 }
-````
+```
 
 ## Server Configuration
 
