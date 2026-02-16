@@ -272,20 +272,20 @@ export class AuditController {
 
 The `Server` class accepts the following options:
 
-| Option             | Type            | Description                                                      |
-| ------------------ | --------------- | ---------------------------------------------------------------- |
-| `id`               | `string`        | Unique identifier for the server instance.                       |
-| `port`             | `number`        | Port to listen on.                                               |
-| `controllersDir`   | `string`        | Directory containing controller files.                           |
-| `enableSwagger`    | `boolean`       | Enable OpenAPI documentation.                                    |
-| `swaggerPath`      | `string`        | Custom path for Swagger UI (default: `/api-docs`).               |
-| `logging`          | `boolean`       | Enable/disable TUI startup messages (default: true).             |
-| `corsOptions`      | `CorsOptions`   | Configuration for CORS.                                          |
-| `helmetOptions`    | `HelmetOptions` | Configuration for Helmet security headers.                       |
-| `rateLimitOptions` | `any`           | Configuration for rate limiting.                                 |
-| `securitySchemes`  | `object`        | custom OpenAPI security schemes definitions.                     |
-| `securityHandlers` | `object`        | Middleware handlers for security schemes.                        |
-| `container`        | `object`        | IoC container for dependency injection (must have `get` method). |
+| Option             | Type               | Description                                                      |
+| ------------------ | ------------------ | ---------------------------------------------------------------- |
+| `id`               | `string`           | Unique identifier for the server instance.                       |
+| `port`             | `number`           | Port to listen on.                                               |
+| `controllersDir`   | `string`           | Directory containing controller files.                           |
+| `enableSwagger`    | `boolean`          | Enable OpenAPI documentation.                                    |
+| `swaggerPath`      | `string`           | Custom path for Swagger UI (default: `/api-docs`).               |
+| `logging`          | `boolean`          | Enable/disable TUI startup messages (default: true).             |
+| `corsOptions`      | `CorsOptions`      | Configuration for CORS.                                          |
+| `helmetOptions`    | `HelmetOptions`    | Configuration for Helmet security headers.                       |
+| `rateLimitOptions` | `RateLimitOptions` | Configuration for rate limiting.                                 |
+| `securitySchemes`  | `object`           | custom OpenAPI security schemes definitions.                     |
+| `securityHandlers` | `object`           | Middleware handlers for security schemes.                        |
+| `container`        | `object`           | IoC container for dependency injection (must have `get` method). |
 
 ## License
 

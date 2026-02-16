@@ -10,7 +10,9 @@ import swaggerUi from "swagger-ui-express";
 import swaggerJsdoc = require("swagger-jsdoc");
 import helmet, { type HelmetOptions } from "helmet";
 import cors from "cors";
-import rateLimit from "express-rate-limit";
+import rateLimit, {
+  type Options as RateLimitOptions,
+} from "express-rate-limit";
 import Ajv from "ajv";
 import addFormats from "ajv-formats";
 import { MetadataStorage } from "../Decorations";
@@ -588,7 +590,7 @@ export interface ServerOptions {
   controllersDir?: string;
   corsOptions?: cors.CorsOptions;
   helmetOptions?: HelmetOptions;
-  rateLimitOptions?: any;
+  rateLimitOptions?: Partial<RateLimitOptions>;
   securityHandlers?: Record<
     string,
     (req: Request, res: Response, next: NextFunction) => void
