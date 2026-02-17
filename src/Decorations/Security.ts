@@ -36,10 +36,6 @@ export function Security(
   };
 }
 
-export function OAuth(scopes: string[] = []): MethodDecorator & ClassDecorator {
-  return Security("oauth2", scopes);
-}
-
 export function ApiKey(name: string): MethodDecorator & ClassDecorator {
   return Security(name, []);
 }

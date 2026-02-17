@@ -1,30 +1,21 @@
 import { OpenAPIV3 } from "openapi-types";
 
 // Key to store auth metadata
-export const AUTH_METADATA_KEY = "auth:info";
 export const PUBLIC_METADATA_KEY = "auth:public";
+export const ROLES_METADATA_KEY = "auth:roles";
 
-export interface AuthInfo {
-  secret?: string;
-}
-
-export function BearerAuth(secret?: string): MethodDecorator & ClassDecorator {
+export function Authorized(
+  roles: string[] = [],
+): MethodDecorator & ClassDecorator {
   return function (
     target: any,
     propertyKey?: string | symbol,
     descriptor?: PropertyDescriptor,
   ) {
-    // If used on a method
     if (propertyKey) {
-      Reflect.defineMetadata(
-        AUTH_METADATA_KEY,
-        { secret },
-        target,
-        propertyKey,
-      );
+      Reflect.defineMetadata(ROLES_METADATA_KEY, roles, target, propertyKey);
     } else {
-      // If used on a class
-      Reflect.defineMetadata(AUTH_METADATA_KEY, { secret }, target);
+      Reflect.defineMetadata(ROLES_METADATA_KEY, roles, target);
     }
   };
 }

@@ -16,12 +16,12 @@ import rateLimit, {
 import Ajv from "ajv";
 import addFormats from "ajv-formats";
 import { MetadataStorage } from "../Decorations";
-import { Server as HttpServer } from "http";
-import * as jwt from "jsonwebtoken";
+import { Server as HttpServer, createServer } from "http";
+import { Server as SocketServer } from "socket.io";
+import { UserHandler } from "./UserHandler";
 import {
-  AUTH_METADATA_KEY,
   PUBLIC_METADATA_KEY,
-  type AuthInfo,
+  ROLES_METADATA_KEY,
 } from "../Decorations/Authorized";
 import {
   SECURITY_METADATA_KEY,
@@ -40,6 +40,7 @@ export class Server {
   private readonly _app: Express;
   private readonly _port: number;
   private readonly _controllersDir: string;
+  private readonly _viewsDir?: string;
   public readonly _id: string;
   private readonly _enableSwagger: boolean;
   private readonly _swaggerPath: string;
@@ -51,13 +52,18 @@ export class Server {
     (req: Request, res: Response, next: NextFunction) => void
   >;
   private readonly _container?: { get: (target: any) => any };
+  private readonly _roleHandler?: (
+    req: Request,
+    roles: string[],
+  ) => boolean | Promise<boolean>;
+  private _userHandler?: UserHandler;
   private _serverInstance?: HttpServer;
+  private _io?: SocketServer;
   // Stats
   private _controllerCount = 0;
   private _routeCount = 0;
   private _tailwindEnabled = false;
   private _devMode = false;
-  private _sseClients: Response[] = [];
 
   constructor(options: ServerOptions) {
     this._port = options.port;
@@ -68,29 +74,54 @@ export class Server {
     this._enableLogging =
       options.logging === undefined ? true : options.logging;
     this._controllersDir = options.controllersDir || "controllers";
+    this._viewsDir = options.viewsDir;
     this._securityHandlers = options.securityHandlers || {};
     this._securitySchemes = options.securitySchemes;
     this._container = options.container;
+    this._roleHandler = options.roleHandler;
 
-    // Initialize AJV
-    this._ajv = new Ajv({ allErrors: true, strict: false });
+    // Initialize AJV with strict mode for better security
+    this._ajv = new Ajv({
+      allErrors: true,
+      strict: true,
+      removeAdditional: true, // Automatically remove properties not in schema
+    });
     addFormats(this._ajv);
 
     // Security Middleware
-    this._app.use(helmet(options.helmetOptions));
+    const helmetOptions: any = options.helmetOptions || {};
+    if (process.env.NODE_ENV !== "production") {
+      // Relax CSP for HMR in development
+      helmetOptions.contentSecurityPolicy = {
+        directives: {
+          defaultSrc: ["'self'"],
+          scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "blob:"],
+          connectSrc: ["'self'", "ws:", "wss:", "http:", "https:"],
+          styleSrc: ["'self'", "'unsafe-inline'"],
+          imgSrc: ["'self'", "data:", "blob:"],
+          frameSrc: ["'self'"],
+        },
+      };
+    }
+    this._app.use(helmet(helmetOptions));
     this._app.use(cors(options.corsOptions));
     this._app.use(
       rateLimit(
         options.rateLimitOptions || {
           windowMs: 15 * 60 * 1000,
           max: 100,
+          skip: (req) =>
+            ServeMemoryStore.instance.getAsset(req.path) !== undefined, // Don't rate limit static assets
         },
       ),
     );
 
-    this._app.use(express.json());
+    this._app.use(express.json({ limit: "1mb" })); // Protection against large payloads
 
-    this._devMode = options.devMode ?? process.env.NODE_ENV === "development";
+    // Clear cache on startup
+    ServeMemoryStore.instance.clearCache();
+
+    this._devMode = process.env.NODE_ENV !== "production";
     if (this._devMode) {
       this.setupHmr();
     }
@@ -100,27 +131,16 @@ export class Server {
 
   private setupHmr() {
     ServeMemoryStore.instance.setDevMode(true);
-    ServeMemoryStore.instance.onRebuild(() => {
-      this.log(
-        `[${this._id}] Sending reload signal to ${this._sseClients.length} clients`,
-      );
-      this._sseClients.forEach((res) => {
-        res.write("data: reload\n\n");
-      });
+    ServeMemoryStore.instance.onRebuild((data) => {
+      if (data && data.html) {
+        this._io?.emit("rebuild", { html: data.html });
+      } else {
+        this._io?.emit("reload");
+      }
     });
 
-    this._app.get("/ebw-hmr", (req, res) => {
-      res.setHeader("Content-Type", "text/event-stream");
-      res.setHeader("Cache-Control", "no-cache");
-      res.setHeader("Connection", "keep-alive");
-      res.flushHeaders();
-
-      this._sseClients.push(res);
-
-      req.on("close", () => {
-        this._sseClients = this._sseClients.filter((c) => c !== res);
-      });
-    });
+    // No redundant global watcher here, we rely on ServeMemoryStore's specific watchers
+    // which rebuild before notifying.
   }
 
   private log(message: string): void {
@@ -130,6 +150,9 @@ export class Server {
   }
 
   public async init(): Promise<void> {
+    if (this._userHandler) {
+      this.setupAuthRoutes();
+    }
     await this.loadControllers();
 
     if (this._enableSwagger) {
@@ -142,6 +165,14 @@ export class Server {
 
       const asset = ServeMemoryStore.instance.getAsset(req.path);
       if (asset) {
+        if (this._devMode) {
+          res.setHeader(
+            "Cache-Control",
+            "no-store, no-cache, must-revalidate, proxy-revalidate",
+          );
+          res.setHeader("Pragma", "no-cache");
+          res.setHeader("Expires", "0");
+        }
         res.type(asset.type).send(Buffer.from(asset.content));
         return;
       }
@@ -151,15 +182,36 @@ export class Server {
     // Global Error Handler
     this._app.use(
       (err: any, req: Request, res: Response, next: NextFunction) => {
-        console.error(`[${this._id}] Error:`, err);
+        const isProd = process.env.NODE_ENV === "production";
+        if (!isProd) {
+          console.error(`[${this._id}] Error:`, err);
+        }
+
         res.status(err.status || 500).json({
           error: "Internal Server Error",
-          message: "An unexpected error occurred",
+          message: isProd
+            ? "An unexpected error occurred"
+            : err.message || "An unexpected error occurred",
+          // Mask stack trace in production
+          stack: isProd ? undefined : err.stack,
         });
       },
     );
 
-    this._serverInstance = this._app.listen(this._port, () => {
+    this._serverInstance = createServer(this._app);
+
+    if (this._devMode) {
+      this._io = new SocketServer(this._serverInstance, {
+        cors: {
+          origin: [/localhost/, /127\.0\.0\.1/], // Restrict HMR to local development origin
+        },
+      });
+      this._io.on("connection", (socket) => {
+        // Disconnected client log
+      });
+    }
+
+    this._serverInstance.listen(this._port, () => {
       if (this._enableLogging) {
         this.printStartupMessage();
       }
@@ -183,6 +235,10 @@ export class Server {
         this._devMode ? pc.cyan("Active") : pc.dim("Inactive")
       }`,
     ];
+
+    if (this._viewsDir) {
+      lines.push(`${pc.bold(pad("Views:"))}${this._viewsDir}`);
+    }
 
     if (this._enableSwagger) {
       lines.push(
@@ -211,6 +267,41 @@ export class Server {
       });
     }
     global.servers.delete(this._id);
+  }
+
+  public setUserHandler(handler: UserHandler): void {
+    this._userHandler = handler;
+  }
+
+  private setupAuthRoutes(): void {
+    if (!this._userHandler) return;
+
+    this._app.post("/auth/signin", async (req, res, next) => {
+      try {
+        const result = await this._userHandler!.signin(req, res);
+        res.json(result);
+      } catch (err) {
+        next(err);
+      }
+    });
+
+    this._app.post("/auth/signup", async (req, res, next) => {
+      try {
+        const result = await this._userHandler!.signup(req, res);
+        res.json(result);
+      } catch (err) {
+        next(err);
+      }
+    });
+
+    this._app.post("/auth/logout", async (req, res, next) => {
+      try {
+        const result = await this._userHandler!.logout(req, res);
+        res.json(result);
+      } catch (err) {
+        next(err);
+      }
+    });
   }
 
   private async loadControllers(): Promise<void> {
@@ -257,12 +348,6 @@ export class Server {
         ? this._container.get(controller.target)
         : new controller.target();
 
-      // Check class level auth
-      const classAuthInfo: AuthInfo | undefined = Reflect.getMetadata(
-        AUTH_METADATA_KEY,
-        controller.target,
-      );
-
       for (const route of controller.routes) {
         const fullPath = (controller.path + "/" + route.path).replace(
           /\/+/g,
@@ -272,12 +357,18 @@ export class Server {
           (req: Request, res: Response, next: NextFunction) => void
         > = [];
 
-        // Check method level metadata
-        const methodAuthInfo: AuthInfo | undefined = Reflect.getMetadata(
-          AUTH_METADATA_KEY,
+        // Check ROLES metadata
+        const classRoles: string[] | undefined = Reflect.getMetadata(
+          ROLES_METADATA_KEY,
+          controller.target,
+        );
+        const methodRoles: string[] | undefined = Reflect.getMetadata(
+          ROLES_METADATA_KEY,
           controller.target.prototype,
           route.handlerName,
         );
+
+        const requiredRoles = methodRoles || classRoles;
 
         const isPublic = Reflect.getMetadata(
           PUBLIC_METADATA_KEY,
@@ -285,20 +376,10 @@ export class Server {
           route.handlerName,
         );
 
-        // Determine if auth is required and which secret to use
-        let authSecret: string | undefined;
-
-        if (isPublic) {
-          authSecret = undefined;
-        } else if (methodAuthInfo) {
-          authSecret = methodAuthInfo.secret || process.env.JWT_SECRET;
-        } else if (classAuthInfo) {
-          authSecret = classAuthInfo.secret || process.env.JWT_SECRET;
-        }
-
-        // 1. Auth Middleware (New Decorator Logic)
-        if (authSecret) {
-          middlewares.push(this.createJwtMiddleware(authSecret));
+        // 1. Auth & Role Middlewares
+        if (!isPublic) {
+          // If not public, we always run the role check (which might include authentication via UserHandler)
+          middlewares.push(this.createRoleMiddleware(requiredRoles || []));
 
           // Inject Swagger security definition automatically
           if (!route.swagger) {
@@ -324,7 +405,9 @@ export class Server {
           }
         }
 
-        // 2. Generic Security Middleware (@Security, @OAuth, etc)
+        // 1.1 Role Middlewares - now handled above for non-public routes
+
+        // 2. Generic Security Middleware (@Security, @ApiKey, etc)
         const classGenericSecurity: SecurityRequirement[] =
           Reflect.getMetadata(SECURITY_METADATA_KEY, controller.target) || [];
         const methodGenericSecurity: SecurityRequirement[] =
@@ -427,9 +510,22 @@ export class Server {
         }
 
         // 3. Route Handler
-        const handler = (req: Request, res: Response, next: NextFunction) => {
+        const handler = async (
+          req: Request,
+          res: Response,
+          next: NextFunction,
+        ) => {
           try {
-            const result = instance[route.handlerName](req, res, next);
+            const user = this._userHandler
+              ? await this._userHandler.authenticate(req, res)
+              : (req as any).user;
+
+            const result = instance[route.handlerName]({
+              req,
+              res,
+              user,
+              next,
+            });
 
             const handleResult = (val: any) => {
               if (val !== undefined && !res.headersSent) {
@@ -461,7 +557,7 @@ export class Server {
           route.handlerName,
         );
         if (htmlPath) {
-          this.log(`[${this._id}] Pre-building HTML: ${htmlPath}`);
+          // Silent pre-build
           await ServeMemoryStore.instance.buildAndCache(
             htmlPath,
             tailwindOptions,
@@ -471,22 +567,52 @@ export class Server {
     }
   }
 
-  private createJwtMiddleware(secret: string) {
-    return (req: Request, res: Response, next: NextFunction) => {
-      const authHeader = req.headers.authorization;
-      if (!authHeader || !authHeader.startsWith("Bearer ")) {
-        return res
-          .status(401)
-          .json({ error: "Unauthorized: Missing Bearer token" });
+  private createRoleMiddleware(roles: string[]) {
+    return async (req: Request, res: Response, next: NextFunction) => {
+      const user = this._userHandler
+        ? await this._userHandler.authenticate(req, res)
+        : (req as any).user;
+
+      if (!user) {
+        return res.status(401).json({ error: "Unauthorized: No user found" });
       }
 
-      const token = authHeader.split(" ")[1];
+      // If no specific roles required, but it's not public, just authentication is enough
+      if (roles.length === 0) {
+        return next();
+      }
+
+      if (!this._roleHandler) {
+        // Default role check behavior
+        const userRoles = Array.isArray(user.roles)
+          ? user.roles
+          : user.role
+            ? [user.role]
+            : [];
+
+        const hasRole = roles.some((role) => userRoles.includes(role));
+        if (!hasRole) {
+          return res.status(403).json({
+            error: "Forbidden: You do not have the required permissions",
+          });
+        }
+        return next();
+      }
+
       try {
-        const decoded = jwt.verify(token as string, secret as string);
-        (req as any).user = decoded; // Attach user to request
-        next();
+        const result = await this._roleHandler(req, roles);
+        if (result) {
+          // Assuming 'result' is a boolean indicating success
+          next();
+        } else {
+          // The provided snippet seems to be for serving HTML, which is out of context for a role middleware.
+          // Applying the original logic for role failure.
+          res.status(403).json({
+            error: "Forbidden: You do not have the required permissions",
+          });
+        }
       } catch (err) {
-        return res.status(403).json({ error: "Forbidden: Invalid token" });
+        next(err);
       }
     };
   }
@@ -638,7 +764,7 @@ export interface ServerOptions {
   logging?: boolean;
   id: string;
   controllersDir?: string;
-  devMode?: boolean;
+  viewsDir?: string;
   corsOptions?: cors.CorsOptions;
   helmetOptions?: HelmetOptions;
   rateLimitOptions?: Partial<RateLimitOptions>;
@@ -648,4 +774,5 @@ export interface ServerOptions {
   >;
   securitySchemes?: Record<string, any>;
   container?: { get: (target: any) => any };
+  roleHandler?: (req: Request, roles: string[]) => boolean | Promise<boolean>;
 }

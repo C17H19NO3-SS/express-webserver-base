@@ -20,14 +20,22 @@ export function Serve(htmlPath: string): MethodDecorator {
 
     const originalMethod = descriptor.value;
 
-    descriptor.value = async function (
-      req: Request,
-      res: Response,
-      next: NextFunction,
-    ) {
+    descriptor.value = async function ({
+      req,
+      res,
+      user,
+      next,
+    }: {
+      req: Request;
+      res: Response;
+      user: any;
+      next: NextFunction;
+    }) {
       try {
         // Execute the original method
-        const result = await originalMethod.apply(this, [req, res, next]);
+        const result = await originalMethod.apply(this, [
+          { req, res, user, next },
+        ]);
 
         // Check if response has been sent or if result is not undefined/void
         if (res.headersSent || result !== undefined) {
@@ -44,12 +52,25 @@ export function Serve(htmlPath: string): MethodDecorator {
           tailwindOptions,
         );
         if (html) {
+          const devMode = process.env.NODE_ENV === "development";
+          if (devMode) {
+            res.setHeader(
+              "Cache-Control",
+              "no-store, no-cache, must-revalidate, proxy-revalidate",
+            );
+            res.setHeader("Pragma", "no-cache");
+            res.setHeader("Expires", "0");
+          }
           res.type("html").send(html);
-        } else {
+        } else if (next) {
           next(); // No HTML found?
         }
       } catch (error) {
-        next(error);
+        if (next) {
+          next(error);
+        } else {
+          throw error;
+        }
       }
     };
 

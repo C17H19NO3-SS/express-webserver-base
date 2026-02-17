@@ -1,13 +1,11 @@
 import { Controller } from "../../src/Decorations/Controller";
 import { Get, Post } from "../../src/Decorations/Methods";
-import { BearerAuth, Public } from "../../src/Decorations/Authorized";
+import { Public, Authorized } from "../../src/Decorations/Authorized";
 import type { Request, Response } from "express";
 import { Serve } from "../../src/Decorations/Serve";
 import { Tailwindcss } from "../../src/Decorations/Tailwind";
-import { OAuth } from "../../src/Decorations/Security";
 
 @Controller("", { tags: ["Example"] })
-@BearerAuth()
 @Tailwindcss()
 export class ExampleController {
   @Get("/", {
@@ -28,7 +26,7 @@ export class ExampleController {
   })
   @Public()
   @Serve("example/views/src/index.html")
-  public home(req: Request, res: Response) {}
+  public home({ req, res }: { req: Request; res: Response }) {}
 
   @Post("/echo", {
     summary: "Echo request body",
@@ -63,7 +61,7 @@ export class ExampleController {
     },
   })
   @Public()
-  public echo(req: Request, res: Response) {
+  public echo({ req }: { req: Request }) {
     return req.body;
   }
 
@@ -89,21 +87,32 @@ export class ExampleController {
       },
     },
   })
-  public secure(req: Request, res: Response) {
-    return { message: "This is a secure data", user: (req as any).user };
+  public secure({ user }: { user: any }) {
+    return { message: "This is a secure data", user };
   }
 
-  @Get("/oauth", {
-    summary: "OAuth protected endpoint",
-    description: "Requires a valid OAuth2 token with 'read:profile' scope.",
+  @Get("/admin", {
+    summary: "Admin only endpoint",
+    description: "Requires 'admin' role.",
     responses: {
-      200: {
-        description: "Access granted via OAuth.",
-      },
+      200: { description: "Welcome admin" },
+      403: { description: "Forbidden" },
     },
   })
-  @OAuth(["read:profile"])
-  public oauth(req: Request, res: Response) {
-    return { message: "OAuth Success", user: (req as any).user };
+  @Authorized(["admin"])
+  public adminOnly({ user }: { user: any }) {
+    return { message: "Hello Admin!", user };
+  }
+
+  @Get("/editor", {
+    summary: "Editor or Admin endpoint",
+    description: "Requires 'editor' or 'admin' role.",
+    responses: {
+      200: { description: "Welcome" },
+    },
+  })
+  @Authorized(["editor", "admin"])
+  public editorOrAdmin({ user }: { user: any }) {
+    return { message: "Hello Editor/Admin!", user };
   }
 }
