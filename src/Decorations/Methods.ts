@@ -3,7 +3,7 @@ import { MetadataStorage, type RouteDefinition } from "./Metadata";
 import { OpenAPIV3 } from "openapi-types";
 
 export function Get(
-  path: string,
+  path: string | RegExp,
   swagger?: OpenAPIV3.OperationObject,
 ): MethodDecorator {
   return function (
@@ -21,7 +21,7 @@ export function Get(
 }
 
 export function Post(
-  path: string,
+  path: string | RegExp,
   swagger?: OpenAPIV3.OperationObject,
 ): MethodDecorator {
   return function (
@@ -39,7 +39,7 @@ export function Post(
 }
 
 export function Put(
-  path: string,
+  path: string | RegExp,
   swagger?: OpenAPIV3.OperationObject,
 ): MethodDecorator {
   return function (
@@ -57,7 +57,7 @@ export function Put(
 }
 
 export function Delete(
-  path: string,
+  path: string | RegExp,
   swagger?: OpenAPIV3.OperationObject,
 ): MethodDecorator {
   return function (
@@ -75,7 +75,7 @@ export function Delete(
 }
 
 export function Patch(
-  path: string,
+  path: string | RegExp,
   swagger?: OpenAPIV3.OperationObject,
 ): MethodDecorator {
   return function (

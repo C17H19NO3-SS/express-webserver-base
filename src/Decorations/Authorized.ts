@@ -14,6 +14,8 @@ export function Authorized(
   ) {
     if (propertyKey) {
       Reflect.defineMetadata(ROLES_METADATA_KEY, roles, target, propertyKey);
+      // Explicitly mark as not public to prevent bypass if @Public() is also used
+      Reflect.defineMetadata(PUBLIC_METADATA_KEY, false, target, propertyKey);
     } else {
       Reflect.defineMetadata(ROLES_METADATA_KEY, roles, target);
     }

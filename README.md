@@ -1,17 +1,17 @@
 # @synchjs/ewb
 
-A robust, decorator-based web server framework built on top of **Express** and optimized for **Bun**. It provides a structured way to build scalable APIs with built-in support for **OpenAPI (Swagger)**, **Validation**, **Authentication**, and **Frontend Asset Serving** (with Tailwind CSS support).
+A robust, decorator-based web server framework built on top of **Express** and optimized for **Bun**. It provides a structured way to build scalable APIs with built-in support for **OpenAPI (Swagger)**, **Validation**, **Custom User Management**, and **Frontend Asset Serving** with **HMR (Hot Module Replacement)**.
 
 ## Features
 
 - 🏗 **Decorator-based Routing**: Define controllers and routes using concise decorators (`@Controller`, `@Get`, `@Post`).
-- 🔒 **Built-in Authentication**: Easy-to-use Bearer Token authentication (`@BearerAuth`).
+- 👥 **Flexible User Management**: Pluggable `UserHandler` for custom Auth/Identity logic (JWT, Session, Database, etc.).
 - 📜 **Auto-generated Swagger Docs**: Your API documentation is generated automatically from your code.
-- ✅ **Request Validation**: Schema-based validation using AJV.
-- 🎨 **Frontend Serving**: Serve HTML/CSS/JS assets from memory, with built-in **Tailwind CSS** processing via Bun plugins.
-- 🧩 **Dependency Injection**: Support for IoC containers.
-- 🚀 **Bun Optimized**: Leverages Bun's build capabilities for static assets.
-- 🖥 **TUI-style Logs**: Clean and informative startup messages.
+- ✅ **Request Validation**: Strict schema-based validation using AJV.
+- 🔥 **Hot Module Replacement (HMR)**: Real-time frontend updates without full page reloads using Socket.io and hot script swapping.
+- 🎨 **Frontend Serving**: Serve HTML/CSS/JS assets from memory, with built-in **Tailwind CSS** processing.
+- 🐚 **Security Hardened**: Built-in protection with **Helmet**, **CORS**, **Rate Limiting**, and path traversal protection.
+- 🖥 **Premium TUI Logs**: Clean, informative, and beautiful startup messages.
 
 ## Installation
 
@@ -26,16 +26,14 @@ bun add @synchjs/ewb
 Create a file `controllers/HomeController.ts`:
 
 ```typescript
-import { Controller, Get } from "ewb";
-import type { Request, Response } from "express";
+import { Controller, Get } from "@synchjs/ewb";
 
 @Controller("/")
 export class HomeController {
   @Get("/", {
     summary: "Welcome endpoint",
-    description: "Returns a welcome message.",
   })
-  public index(req: Request, res: Response) {
+  public index() {
     return { message: "Hello from @synchjs/ewb!" };
   }
 }
@@ -46,246 +44,128 @@ export class HomeController {
 Create `index.ts`:
 
 ```typescript
-import { Server } from "ewb";
+import { Server } from "@synchjs/ewb";
 
 const server = new Server({
   id: "main",
   port: 3000,
-  controllersDir: "controllers", // Directory where your controllers are located
-  enableSwagger: true, // Enable Swagger UI at /api-docs
+  controllersDir: "controllers",
 });
 
-server.init();
+await server.init();
 ```
 
-Run with Bun:
+## Authentication & User Management
 
-```bash
-bun run index.ts
-```
+The framework uses a `UserHandler` system to give you full control over identity.
 
-### 3. Customize Swagger Path
-
-You can change where Swagger UI is served:
+### 1. Define your User Handler
 
 ```typescript
-const server = new Server({
-  id: "main",
-  port: 3000,
-  enableSwagger: true,
-  swaggerPath: "/docs", // Now available at http://localhost:3000/docs
-});
-```
-
-## Detailed Usage
-
-### Controllers & Routing
-
-Use `@Controller` to define a base path and HTTP method decorators for routes.
-
-```typescript
-import { Controller, Get, Post, Put, Delete } from "ewb";
+import { UserHandler } from "@synchjs/ewb";
 import type { Request, Response } from "express";
 
-@Controller("/users", { tags: ["Users"] })
-export class UserController {
-  @Get("/:id")
-  public getUser(req: Request, res: Response) {
-    const { id } = req.params;
-    return { id, name: "User " + id };
-  }
-
-  @Post("/", {
-    summary: "Create User",
-    responses: {
-      201: { description: "User created" },
-    },
-  })
-  public createUser(req: Request, res: Response) {
-    // Logic to create user
-    return { id: 1, ...req.body };
-  }
-}
-```
-
-### Authentication
-
-Secure your endpoints using `@BearerAuth`. It integrates with JWT verification automatically.
-
-- **Class Level:** Protects all routes in the controller.
-- **Method Level:** Protects specific routes.
-- **@Public():** Excludes a route from class-level auth.
-
-```typescript
-import { Controller, Get, BearerAuth, Public } from "ewb";
-
-@Controller("/secure")
-@BearerAuth("my_secret_key") // Optional: Custom secret, defaults to process.env.JWT_SECRET
-export class SecureController {
-  @Get("/dashboard")
-  public dashboard(req: Request, res: Response) {
-    // Access user data attached by middleware (req.user)
-    const user = (req as any).user;
-    return { message: "Secret data", user };
-  }
-
-  @Get("/status")
-  @Public() // Accessible without token
-  public status(req: Request, res: Response) {
-    return { status: "OK" };
-  }
-}
-```
-
-#### Advanced Security (@Security, @OAuth, @ApiKey)
-
-For other authentication methods like OAuth2 or API Keys, use generic decorators:
-
-```typescript
-import { Controller, Get, OAuth, ApiKey } from "ewb";
-
-@Controller("/api")
-export class ApiController {
-  @Get("/profile")
-  @OAuth(["read:profile"]) // Marks route as requiring OAuth2 with specific scope
-  public getProfile() {
-    return { name: "John Doe" };
-  }
-
-  @Get("/data")
-  @ApiKey("X-API-KEY") // Custom security scheme name
-  public getData() {
-    return { sensitive: "data" };
-  }
-}
-```
-
-**Configure Handlers and Schemes:**
-
-```typescript
-const server = new Server({
-  // ...,
-  securitySchemes: {
-    oauth2: {
-      type: "oauth2",
-      flows: {
-        /* ... standard OpenAPI flow definition ... */
-      },
-    },
-  },
-  securityHandlers: {
-    oauth2: (req, res, next) => {
-      // Your OAuth validation logic here
-      next();
-    },
-  },
-});
-```
-
-### Request Validation
-
-Define a JSON schema in the `@Post` (or other method) decorator to automatically validate the request body using AJV.
-
-```typescript
-@Post("/register", {
-  summary: "Register new user",
-  requestBody: {
-    content: {
-      "application/json": {
-        schema: {
-          type: "object",
-          properties: {
-            username: { type: "string" },
-            email: { type: "string", format: "email" },
-            age: { type: "integer", minimum: 18 }
-          },
-          required: ["username", "email"]
-        }
-      }
+class MyUserHandler extends UserHandler {
+  // Determine who the user is for every request
+  public async authenticate(req: Request, res: Response) {
+    const token = req.headers.authorization?.replace("Bearer ", "");
+    if (token === "admin-secret") {
+      return { id: 1, name: "Admin", roles: ["admin"] };
     }
+    return null;
   }
-})
-public register(req: Request, res: Response) {
-  // If execution reaches here, req.body is valid
-  return { success: true };
+
+  // Optional: Automatic routes for /auth/signin, signup, logout
+  public signin(req: Request, res: Response) {
+    /* ... */
+  }
+  public signup(req: Request, res: Response) {
+    /* ... */
+  }
+  public logout(req: Request, res: Response) {
+    /* ... */
+  }
 }
 ```
 
-### Serving Frontend Assets (with Tailwind CSS)
+### 2. Protect Routes
 
-You can serve compiled HTML and automatically process Tailwind CSS using the `@Serve` and `@Tailwindcss` decorators.
-
-1.  **Project Structure**:
-
-    ```
-    /views
-      src/
-        index.html
-        index.css (imports tailwind, or handled via plugin)
-        frontend.tsx
-    ```
-
-2.  **Controller Setup**:
+Use `@Authorized` to require a user, or specify roles.
 
 ```typescript
-import { Controller, Get, Serve, Tailwindcss } from "ewb";
+import { Controller, Get, Authorized } from "@synchjs/ewb";
+
+@Controller("/dashboard")
+export class DashboardController {
+  @Get("/profile")
+  @Authorized() // Requires a non-null return from your UserHandler
+  public getProfile({ user }: { user: any }) {
+    return { message: `Hello ${user.name}` };
+  }
+
+  @Get("/admin")
+  @Authorized(["admin"]) // Checks roles array from UserHandler
+  public adminOnly() {
+    return { message: "Admin area" };
+  }
+}
+```
+
+### 3. Register the Handler
+
+```typescript
+const server = new Server({ ... });
+server.setUserHandler(new MyUserHandler()); // Routes /auth/* are created automatically
+await server.init();
+```
+
+## Hot Module Replacement (HMR)
+
+HMR is active by default when `NODE_ENV` is not set to `production`. It uses Socket.io to sync changes.
+
+- **Fast Refresh**: Specifically optimized for React applications.
+- **Hot Script Swapping**: Updates code in the browser without losing state or full page reloads.
+- **Cache Control**: Automatically disables browser caching during development.
+
+## Serving Frontend Assets
+
+Use `@Serve` to bundle and serve frontend entry points.
+
+```typescript
+import { Controller, Get, Serve, Tailwindcss } from "@synchjs/ewb";
 
 @Controller("/")
-@Tailwindcss({
-  enable: true,
-  plugins: [
-    /* Bun plugins or custom PostCSS wrappers */
-  ],
-})
+@Tailwindcss({ enable: true })
 export class FrontendController {
   @Get("/")
-  @Serve("views/src/index.html") // Path to your HTML entry point
-  public app(req: Request, res: Response) {
-    // The decorator handles the response.
+  @Serve("views/src/index.html")
+  public app() {
+    // Handled by memory store
   }
 }
 ```
 
-### Middleware
+## Security & Best Practices
 
-Apply custom Express middleware to controllers or routes using `@Middleware`.
-
-```typescript
-import { Controller, Get, Middleware } from "ewb";
-
-const logAccess = (req: Request, res: Response, next: NextFunction) => {
-  console.log("Accessed!");
-  next();
-};
-
-@Controller("/audit")
-@Middleware(logAccess)
-export class AuditController {
-  @Get("/")
-  public index(req: Request, res: Response) {
-    return { message: "Audited" };
-  }
-}
-```
+- **Strict Validation**: AJV validates all request bodies defined in Swagger options. It automatically removes additional properties and enforces strict types.
+- **Rate Limiting**: Protects your API from brute-force/DoS. (Static assets are automatically exempt).
+- **Security Headers**: Powered by Helmet, with dynamic CSP adjustments for HMR.
+- **Error Handling**: Production mode masks internal errors and stack traces.
 
 ## Server Configuration
 
-The `Server` class accepts the following options:
-
-| Option             | Type               | Description                                                      |
-| ------------------ | ------------------ | ---------------------------------------------------------------- |
-| `id`               | `string`           | Unique identifier for the server instance.                       |
-| `port`             | `number`           | Port to listen on.                                               |
-| `controllersDir`   | `string`           | Directory containing controller files.                           |
-| `enableSwagger`    | `boolean`          | Enable OpenAPI documentation.                                    |
-| `swaggerPath`      | `string`           | Custom path for Swagger UI (default: `/api-docs`).               |
-| `logging`          | `boolean`          | Enable/disable TUI startup messages (default: true).             |
-| `corsOptions`      | `CorsOptions`      | Configuration for CORS.                                          |
-| `helmetOptions`    | `HelmetOptions`    | Configuration for Helmet security headers.                       |
-| `rateLimitOptions` | `RateLimitOptions` | Configuration for rate limiting.                                 |
-| `securitySchemes`  | `object`           | custom OpenAPI security schemes definitions.                     |
-| `securityHandlers` | `object`           | Middleware handlers for security schemes.                        |
-| `container`        | `object`           | IoC container for dependency injection (must have `get` method). |
+| Option             | Type       | Description                                            |
+| ------------------ | ---------- | ------------------------------------------------------ |
+| `id`               | `string`   | ID for logging and console output.                     |
+| `port`             | `number`   | Port to listen on.                                     |
+| `controllersDir`   | `string`   | Location of your controllers (default: `controllers`). |
+| `viewsDir`         | `string`   | Base directory for frontend views.                     |
+| `enableSwagger`    | `boolean`  | Enable Swagger UI (default: `false`).                  |
+| `swaggerPath`      | `string`   | Path for docs (default: `/api-docs`).                  |
+| `helmetOptions`    | `object`   | Custom Helmet configuration.                           |
+| `corsOptions`      | `object`   | Custom CORS configuration.                             |
+| `rateLimitOptions` | `object`   | Custom Rate Limit configuration.                       |
+| `roleHandler`      | `function` | Custom function for advanced role checking logic.      |
 
 ## License
 

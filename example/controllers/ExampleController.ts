@@ -24,7 +24,7 @@ export class ExampleController {
       },
     },
   })
-  @Public()
+  @Authorized(["admin"])
   @Serve("example/views/src/index.html")
   public home({ req, res }: { req: Request; res: Response }) {}
 

@@ -5,7 +5,7 @@ import { OpenAPIV3 } from "openapi-types";
 
 export interface RouteDefinition {
   method: "get" | "post" | "put" | "delete" | "patch";
-  path: string;
+  path: string | RegExp;
   handlerName: string;
   swagger?: OpenAPIV3.OperationObject;
   middlewares?: RequestHandler[];

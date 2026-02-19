@@ -348,11 +348,18 @@ export class Server {
         ? this._container.get(controller.target)
         : new controller.target();
 
+      const router = express.Router({ mergeParams: true });
+
+      if (controller.middlewares) {
+        router.use(...controller.middlewares);
+      }
+
       for (const route of controller.routes) {
-        const fullPath = (controller.path + "/" + route.path).replace(
-          /\/+/g,
-          "/",
-        );
+        // Used only for Swagger and internal path logic if needed,
+        // but actual routing uses route.path directly which supports RegExp
+        const routePathString =
+          route.path instanceof RegExp ? route.path.source : route.path;
+
         const middlewares: Array<
           (req: Request, res: Response, next: NextFunction) => void
         > = [];
@@ -501,9 +508,11 @@ export class Server {
 
         // 3. Custom Middlewares
         // Controller Level
-        if (controller.middlewares) {
-          middlewares.push(...controller.middlewares);
-        }
+        // if (controller.middlewares) {
+        //   middlewares.push(...controller.middlewares);
+        // }
+        // Controller middlewares are now mounted on the router level.
+
         // Route Level
         if (route.middlewares) {
           middlewares.push(...route.middlewares);
@@ -547,7 +556,8 @@ export class Server {
           }
         };
 
-        (this._app as any)[route.method](fullPath, ...middlewares, handler);
+        // Register route on the controller router
+        (router as any)[route.method](route.path, ...middlewares, handler);
         this._routeCount++;
 
         // Pre-build if @Serve is used
@@ -564,6 +574,8 @@ export class Server {
           );
         }
       }
+
+      this._app.use(controller.path, router);
     }
   }
 
@@ -605,7 +617,6 @@ export class Server {
           // Assuming 'result' is a boolean indicating success
           next();
         } else {
-          // The provided snippet seems to be for serving HTML, which is out of context for a role middleware.
           // Applying the original logic for role failure.
           res.status(403).json({
             error: "Forbidden: You do not have the required permissions",
@@ -697,7 +708,10 @@ export class Server {
 
     for (const controller of controllers) {
       for (const route of controller.routes) {
-        const fullPath = (controller.path + "/" + route.path)
+        const routePathString =
+          route.path instanceof RegExp ? route.path.source : route.path;
+
+        const fullPath = (controller.path + "/" + routePathString)
           .replace(/\/+/g, "/")
           .replace(/:([^/]+)/g, "{$1}");
 
