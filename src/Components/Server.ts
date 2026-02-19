@@ -350,7 +350,7 @@ export class Server {
 
       const router = express.Router({ mergeParams: true });
 
-      if (controller.middlewares) {
+      if (controller.middlewares && controller.middlewares.length > 0) {
         router.use(...controller.middlewares);
       }
 
