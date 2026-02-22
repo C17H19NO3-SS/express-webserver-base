@@ -2,7 +2,7 @@ export const AUTHORIZE_METADATA_KEY = Symbol("authorize");
 
 export function Authorize(secret?: string): ClassDecorator & MethodDecorator {
   return function (
-    target: any,
+    target: Function | Object,
     propertyKey?: string | symbol,
     descriptor?: PropertyDescriptor,
   ) {

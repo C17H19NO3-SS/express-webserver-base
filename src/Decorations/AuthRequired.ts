@@ -2,7 +2,7 @@ export const AUTH_REQUIRED_METADATA_KEY = Symbol("authR_required");
 
 export function AuthRequired(): ClassDecorator & MethodDecorator {
   return function (
-    target: any,
+    target: Function | Object,
     propertyKey?: string | symbol,
     descriptor?: PropertyDescriptor,
   ) {

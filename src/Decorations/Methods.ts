@@ -2,9 +2,9 @@ import type { OpenAPIV3 } from "openapi-types";
 
 export const ROUTE_METADATA_KEY = Symbol("route");
 
-function createMethodDecorator(method: string = "/") {
+function createMethodDecorator(method: string) {
   return function (
-    path: string,
+    path: string = "/",
     swaggerOptions?: Partial<OpenAPIV3.OperationObject>,
   ): MethodDecorator {
     return function (
@@ -12,13 +12,23 @@ function createMethodDecorator(method: string = "/") {
       propertyKey: string | symbol,
       descriptor: PropertyDescriptor,
     ) {
+      const defaultSwagger: Partial<OpenAPIV3.OperationObject> = {
+        summary: `${String(propertyKey)} endpoint`,
+        description: `Auto-generated documentation for ${method.toUpperCase()} ${path}`,
+        responses: {
+          "200": {
+            description: "Successful response",
+          },
+        },
+      };
+
       Reflect.defineMetadata(
         ROUTE_METADATA_KEY,
         {
           path,
           method,
           handlerName: propertyKey,
-          swaggerOptions,
+          swaggerOptions: { ...defaultSwagger, ...swaggerOptions },
         },
         target,
         propertyKey,

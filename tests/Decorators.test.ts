@@ -44,7 +44,15 @@ describe("Decorators", () => {
       path: "/test",
       method: "get",
       handlerName: "getTest",
-      swaggerOptions: { summary: "Test Get" },
+      swaggerOptions: {
+        summary: "Test Get",
+        description: "Auto-generated documentation for GET /test",
+        responses: {
+          "200": {
+            description: "Successful response",
+          },
+        },
+      },
     });
 
     const postMetadata = Reflect.getMetadata(
@@ -56,7 +64,15 @@ describe("Decorators", () => {
       path: "/create",
       method: "post",
       handlerName: "postTest",
-      swaggerOptions: { summary: "Test Post" },
+      swaggerOptions: {
+        summary: "Test Post",
+        description: "Auto-generated documentation for POST /create",
+        responses: {
+          "200": {
+            description: "Successful response",
+          },
+        },
+      },
     });
   });
 

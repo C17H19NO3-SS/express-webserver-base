@@ -5,7 +5,13 @@ import type {
   RateLimitConfig,
   SwaggerConfig,
 } from "../types/Server";
-import express, { type Express } from "express";
+import express, {
+  type Express,
+  type Request,
+  type Response,
+  type NextFunction,
+  type RequestHandler,
+} from "express";
 import swaggerUI from "swagger-ui-express";
 import cors from "cors";
 import rateLimit from "express-rate-limit";
@@ -30,7 +36,7 @@ export class Server {
   private controllerCount: number = 0;
   private routeCount: number = 0;
   private controllersPaths: string[] = [];
-  private swaggerPaths: any = {};
+  private swaggerPaths: Record<string, any> = {};
   private hasAuthRoutes: boolean = false;
 
   constructor(options?: ServerOptions | number) {
@@ -47,7 +53,7 @@ export class Server {
     Error.prepareStackTrace = (_, stack) => stack;
     const e = new Error();
     Error.captureStackTrace(e, Server);
-    const callSites = e.stack as any;
+    const callSites = e.stack as NodeJS.CallSite[] | undefined;
     Error.prepareStackTrace = old;
 
     let callerDir = process.cwd();
@@ -150,7 +156,7 @@ export class Server {
                   "/",
                 );
 
-                const middlewares: any[] = [];
+                const middlewares: RequestHandler[] = [];
                 const authorizeMetadata =
                   Reflect.getMetadata(
                     AUTHORIZE_METADATA_KEY,
@@ -172,37 +178,44 @@ export class Server {
 
                 if (authorizeMetadata || authRequiredMetadata) {
                   this.hasAuthRoutes = true;
-                  middlewares.push((req: any, res: any, next: any) => {
-                    const authHeader = req.headers.authorization;
-                    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-                      if (authRequiredMetadata) {
-                        return res.status(401).json({ error: "Unauthorized" });
+                  middlewares.push(
+                    (req: Request, res: Response, next: NextFunction) => {
+                      const authHeader = req.headers.authorization;
+                      if (!authHeader || !authHeader.startsWith("Bearer ")) {
+                        if (authRequiredMetadata) {
+                          res.status(401).json({ error: "Unauthorized" });
+                          return;
+                        }
+                        return next();
                       }
-                      return next();
-                    }
-                    const token = authHeader.split(" ")[1];
-                    const secret =
-                      authorizeMetadata?.secret || process.env.JWT_SECRET;
-                    if (!secret) {
-                      return res
-                        .status(500)
-                        .json({ error: "JWT secret not configured" });
-                    }
-                    try {
-                      req.user = jwt.verify(token, secret);
-                      next();
-                    } catch (err) {
-                      if (authRequiredMetadata) {
-                        return res.status(401).json({ error: "Invalid token" });
+                      const token = authHeader.split(" ")[1];
+                      const secret =
+                        authorizeMetadata?.secret || process.env.JWT_SECRET;
+                      if (!secret) {
+                        res
+                          .status(500)
+                          .json({ error: "JWT secret not configured" });
+                        return;
                       }
-                      return next();
-                    }
-                  });
+                      try {
+                        (req as any).user = jwt.verify(token!, secret);
+                        next();
+                      } catch (err) {
+                        if (authRequiredMetadata) {
+                          res.status(401).json({ error: "Invalid token" });
+                          return;
+                        }
+                        return next();
+                      }
+                    },
+                  );
                 }
 
-                middlewares.push((req: any, res: any, next: any) => {
-                  instance[methodName](req, res, next, req.user);
-                });
+                middlewares.push(
+                  (req: Request, res: Response, next: NextFunction) => {
+                    instance[methodName](req, res, next, (req as any).user);
+                  },
+                );
 
                 this.app[route.method](fullPath, ...middlewares);
 
