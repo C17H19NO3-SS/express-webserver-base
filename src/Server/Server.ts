@@ -31,6 +31,7 @@ export class Server {
   private routeCount: number = 0;
   private controllersPaths: string[] = [];
   private swaggerPaths: any = {};
+  private hasAuthRoutes: boolean = false;
 
   constructor(options?: ServerOptions | number) {
     if (typeof options === "number") {
@@ -170,6 +171,7 @@ export class Server {
                   );
 
                 if (authorizeMetadata || authRequiredMetadata) {
+                  this.hasAuthRoutes = true;
                   middlewares.push((req: any, res: any, next: any) => {
                     const authHeader = req.headers.authorization;
                     if (!authHeader || !authHeader.startsWith("Bearer ")) {
@@ -317,14 +319,19 @@ export class Server {
         },
         components: {
           ...(userSwaggerOpts.options?.components || {}),
-          securitySchemes: {
-            bearerAuth: {
-              type: "http" as const,
-              scheme: "bearer",
-              bearerFormat: "JWT",
-            },
-            ...(userSwaggerOpts.options?.components?.securitySchemes || {}),
-          },
+          ...(this.hasAuthRoutes
+            ? {
+                securitySchemes: {
+                  bearerAuth: {
+                    type: "http" as const,
+                    scheme: "bearer",
+                    bearerFormat: "JWT",
+                  },
+                  ...(userSwaggerOpts.options?.components?.securitySchemes ||
+                    {}),
+                },
+              }
+            : {}),
         },
       };
 
