@@ -1,6 +1,14 @@
 import { Controller, Get, Post, Authorize, AuthRequired } from "../../src";
 import type { Request, Response, NextFunction } from "express";
 
+@Controller("/", ["Web"])
+export class WebController {
+  @Get("/")
+  public home(req: Request, res: Response) {
+    res.render("index.html");
+  }
+}
+
 @Authorize("my_custom_secret")
 @Controller("/users", ["Users"])
 export class UserController {
