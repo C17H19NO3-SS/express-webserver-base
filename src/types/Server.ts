@@ -1,6 +1,7 @@
 import type { CorsOptions } from "cors";
 import type { Options } from "express-rate-limit";
 import type { OpenAPIV3 } from "openapi-types";
+import type { BunPlugin } from "bun";
 
 export type SwaggerConfig =
   | boolean
@@ -28,6 +29,7 @@ export type ServerOptions = Partial<{
   ratelimit: RateLimitConfig;
   cors: CorsConfig;
   views: ViewsConfig;
+  plugins: BunPlugin[];
 }>;
 
 export type Methods = "get" | "post" | "put" | "delete" | "patch";

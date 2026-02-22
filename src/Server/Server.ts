@@ -81,6 +81,8 @@ export class Server {
     if (this.options.controllers !== undefined)
       this.setControllers(this.options.controllers);
     if (this.options.views !== undefined) this.setViews(this.options.views);
+    if (this.options.plugins !== undefined)
+      this.setPlugins(this.options.plugins);
   }
 
   public setCors(config: CorsConfig = true): this {
@@ -98,6 +100,11 @@ export class Server {
       const ratelimitOptions = typeof config === "boolean" ? {} : config;
       this.app.use(rateLimit(ratelimitOptions));
     }
+    return this;
+  }
+
+  public setPlugins(plugins: ServerOptions["plugins"]): this {
+    this.options.plugins = plugins;
     return this;
   }
 
@@ -126,6 +133,7 @@ export class Server {
               target: "browser",
               format: "esm",
               minify: process.env.NODE_ENV === "production",
+              plugins: this.options.plugins || [],
             });
 
             if (!buildResult.success) {
