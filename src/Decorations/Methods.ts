@@ -6,9 +6,9 @@ function createMethodDecorator(method: string) {
   return function (
     path: string = "/",
     swaggerOptions?: Partial<OpenAPIV3.OperationObject>,
-  ): MethodDecorator {
+  ): any {
     return function (
-      target: Object,
+      target: any,
       propertyKey: string | symbol,
       descriptor: PropertyDescriptor,
     ) {
