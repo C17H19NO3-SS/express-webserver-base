@@ -1,4 +1,10 @@
-import type { Methods, ServerOptions } from "../types/Server";
+import type {
+  Methods,
+  ServerOptions,
+  CorsConfig,
+  RateLimitConfig,
+  SwaggerConfig,
+} from "../types/Server";
 import express, { type Express } from "express";
 import swaggerUI from "swagger-ui-express";
 import cors from "cors";
@@ -68,22 +74,25 @@ export class Server {
       this.setControllers(this.options.controllers);
   }
 
-  public setCors(config: ServerOptions["cors"] = true): this {
+  public setCors(config: CorsConfig = true): this {
     this.options.cors = config;
-    const corsOptions = typeof config === "boolean" || !config ? {} : config;
-    if (config) this.app.use(cors(corsOptions));
+    if (config) {
+      const corsOptions = typeof config === "boolean" ? {} : config;
+      this.app.use(cors(corsOptions));
+    }
     return this;
   }
 
-  public setRateLimit(config: ServerOptions["ratelimit"] = true): this {
+  public setRateLimit(config: RateLimitConfig = true): this {
     this.options.ratelimit = config;
-    const ratelimitOptions =
-      typeof config === "boolean" || !config ? {} : config;
-    if (config) this.app.use(rateLimit(ratelimitOptions));
+    if (config) {
+      const ratelimitOptions = typeof config === "boolean" ? {} : config;
+      this.app.use(rateLimit(ratelimitOptions));
+    }
     return this;
   }
 
-  public setSwagger(config: ServerOptions["swagger"] = true): this {
+  public setSwagger(config: SwaggerConfig = true): this {
     this.options.swagger = config;
     return this;
   }
