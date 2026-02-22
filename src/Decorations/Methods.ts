@@ -1,93 +1,36 @@
-import "reflect-metadata";
-import { MetadataStorage, type RouteDefinition } from "./Metadata";
-import { OpenAPIV3 } from "openapi-types";
+import type { OpenAPIV3 } from "openapi-types";
 
-export function Get(
-  path: string | RegExp,
-  swagger?: OpenAPIV3.OperationObject,
-): MethodDecorator {
+export const ROUTE_METADATA_KEY = Symbol("route");
+
+function createMethodDecorator(method: string = "/") {
   return function (
-    target: any,
-    propertyKey: string | symbol,
-    descriptor: PropertyDescriptor,
-  ) {
-    MetadataStorage.instance.addRoute(target.constructor, {
-      method: "get",
-      path,
-      handlerName: propertyKey as string,
-      swagger,
-    });
+    path: string,
+    swaggerOptions?: Partial<OpenAPIV3.OperationObject>,
+  ): MethodDecorator {
+    return function (
+      target: Object,
+      propertyKey: string | symbol,
+      descriptor: PropertyDescriptor,
+    ) {
+      Reflect.defineMetadata(
+        ROUTE_METADATA_KEY,
+        {
+          path,
+          method,
+          handlerName: propertyKey,
+          swaggerOptions,
+        },
+        target,
+        propertyKey,
+      );
+    };
   };
 }
 
-export function Post(
-  path: string | RegExp,
-  swagger?: OpenAPIV3.OperationObject,
-): MethodDecorator {
-  return function (
-    target: any,
-    propertyKey: string | symbol,
-    descriptor: PropertyDescriptor,
-  ) {
-    MetadataStorage.instance.addRoute(target.constructor, {
-      method: "post",
-      path,
-      handlerName: propertyKey as string,
-      swagger,
-    });
-  };
-}
-
-export function Put(
-  path: string | RegExp,
-  swagger?: OpenAPIV3.OperationObject,
-): MethodDecorator {
-  return function (
-    target: any,
-    propertyKey: string | symbol,
-    descriptor: PropertyDescriptor,
-  ) {
-    MetadataStorage.instance.addRoute(target.constructor, {
-      method: "put",
-      path,
-      handlerName: propertyKey as string,
-      swagger,
-    });
-  };
-}
-
-export function Delete(
-  path: string | RegExp,
-  swagger?: OpenAPIV3.OperationObject,
-): MethodDecorator {
-  return function (
-    target: any,
-    propertyKey: string | symbol,
-    descriptor: PropertyDescriptor,
-  ) {
-    MetadataStorage.instance.addRoute(target.constructor, {
-      method: "delete",
-      path,
-      handlerName: propertyKey as string,
-      swagger,
-    });
-  };
-}
-
-export function Patch(
-  path: string | RegExp,
-  swagger?: OpenAPIV3.OperationObject,
-): MethodDecorator {
-  return function (
-    target: any,
-    propertyKey: string | symbol,
-    descriptor: PropertyDescriptor,
-  ) {
-    MetadataStorage.instance.addRoute(target.constructor, {
-      method: "patch",
-      path,
-      handlerName: propertyKey as string,
-      swagger,
-    });
-  };
-}
+export const Get = createMethodDecorator("get");
+export const Post = createMethodDecorator("post");
+export const Put = createMethodDecorator("put");
+export const Delete = createMethodDecorator("delete");
+export const Patch = createMethodDecorator("patch");
+export const Options = createMethodDecorator("options");
+export const Head = createMethodDecorator("head");

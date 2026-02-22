@@ -1,7 +1,6 @@
-global.servers = new Map();
-
-import "./globals";
-export * from "./Components/Server";
-export * from "./Components/ServeMemoryStore";
-export * from "./Components/UserHandler";
-export * from "./Decorations";
+import "./declare.d.ts";
+export * from "./Server/Server.ts";
+export * from "./Decorations/Controller.ts";
+export * from "./Decorations/Methods.ts";
+export * from "./Decorations/Authorize.ts";
+export * from "./Decorations/AuthRequired.ts";
