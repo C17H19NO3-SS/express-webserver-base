@@ -15,6 +15,7 @@ describe("Server Core and Routing", () => {
       controllers: [path.join(__dirname, "fixtures", "controllers")],
       cors: { origin: "*" },
       swagger: { path: "/docs" },
+      views: { dir: path.join(__dirname, "fixtures", "views") },
     });
 
     await server.init();
@@ -88,5 +89,11 @@ describe("Server Core and Routing", () => {
     const res = await request(serverWithRateLimit.app).get("/test");
     // Just verifying it doesn't crash on boot and wraps around missing route with 404
     expect(res.status).toBe(404);
+  });
+
+  test("Should render dynamic HTML using Bun.build through res.render", async () => {
+    const res = await request(server.app).get("/test/render");
+    expect(res.status).toBe(200);
+    expect(res.text).toContain("Test Page");
   });
 });

@@ -24,4 +24,9 @@ export class DefaultTestController {
   public postPrivate(req: any, res: any, next: any, user: any) {
     res.json({ result: "private_success", user });
   }
+
+  @Get("/render")
+  public renderView(req: any, res: any) {
+    res.render("test.html");
+  }
 }

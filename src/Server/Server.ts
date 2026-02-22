@@ -4,6 +4,7 @@ import type {
   CorsConfig,
   RateLimitConfig,
   SwaggerConfig,
+  ViewsConfig,
 } from "../types/Server";
 import express, {
   type Express,
@@ -79,6 +80,7 @@ export class Server {
       this.setSwagger(this.options.swagger);
     if (this.options.controllers !== undefined)
       this.setControllers(this.options.controllers);
+    if (this.options.views !== undefined) this.setViews(this.options.views);
   }
 
   public setCors(config: CorsConfig = true): this {
@@ -95,6 +97,60 @@ export class Server {
     if (config) {
       const ratelimitOptions = typeof config === "boolean" ? {} : config;
       this.app.use(rateLimit(ratelimitOptions));
+    }
+    return this;
+  }
+
+  public setViews(config: ViewsConfig = true): this {
+    this.options.views = config;
+    if (config) {
+      const viewsOptions = typeof config === "boolean" ? {} : config;
+      const dir = viewsOptions.dir || path.join(process.cwd(), "views");
+      const publicPath = viewsOptions.publicPath || "/_assets/";
+      const cacheDir =
+        viewsOptions.cacheDir || path.join(process.cwd(), ".ebw-build");
+
+      this.app.set("views", dir);
+      this.app.set("view engine", "html");
+      this.app.use(publicPath, express.static(cacheDir));
+
+      this.app.engine(
+        "html",
+        async (filePath: string, options: any, callback: any) => {
+          try {
+            // @ts-ignore
+            const buildResult = await Bun.build({
+              entrypoints: [filePath],
+              outdir: cacheDir,
+              publicPath: publicPath,
+              target: "browser",
+              format: "esm",
+              minify: process.env.NODE_ENV === "production",
+            });
+
+            if (!buildResult.success) {
+              const errors = buildResult.logs
+                .map((l: any) => l.message)
+                .join("\\n");
+              return callback(new Error(`Bun.build failed:\\n${errors}`));
+            }
+
+            const htmlOutput = buildResult.outputs.find(
+              (o: any) => o.kind === "entry-point" && o.path.endsWith(".html"),
+            );
+            if (!htmlOutput) {
+              return callback(
+                new Error("HTML output not found from Bun.build"),
+              );
+            }
+
+            const htmlText = await htmlOutput.text();
+            callback(null, htmlText);
+          } catch (err) {
+            callback(err);
+          }
+        },
+      );
     }
     return this;
   }
@@ -362,9 +418,9 @@ export class Server {
           ? address.port
           : this.port;
 
-      const { swagger, cors, ratelimit } = this.options;
+      const { swagger, cors, ratelimit, views } = this.options;
 
-      const getStatus = (enabled?: boolean) =>
+      const getStatus = (enabled?: boolean | object) =>
         enabled ? chalk.green("Enabled") : chalk.red("Disabled");
 
       const lines = [
@@ -373,9 +429,10 @@ export class Server {
         `${chalk.bold("Controllers:")} ${this.controllerCount}`,
         `${chalk.bold("Routes:")}      ${this.routeCount}`,
         "",
-        `${chalk.bold("Swagger:")}   ${getStatus(!!swagger)}`,
-        `${chalk.bold("CORS:")}      ${getStatus(!!cors)}`,
-        `${chalk.bold("RateLimit:")} ${getStatus(!!ratelimit)}`,
+        `${chalk.bold("Swagger:")}   ${getStatus(swagger)}`,
+        `${chalk.bold("CORS:")}      ${getStatus(cors)}`,
+        `${chalk.bold("RateLimit:")} ${getStatus(ratelimit)}`,
+        `${chalk.bold("Views:")}     ${getStatus(views)}`,
       ];
 
       if (swagger) {

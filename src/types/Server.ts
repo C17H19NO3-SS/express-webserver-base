@@ -13,12 +13,21 @@ export type RateLimitConfig = boolean | Partial<Options>;
 
 export type CorsConfig = boolean | CorsOptions;
 
+export type ViewsConfig =
+  | boolean
+  | {
+      dir?: string;
+      publicPath?: string;
+      cacheDir?: string;
+    };
+
 export type ServerOptions = Partial<{
   port: number;
   controllers: string | string[];
   swagger: SwaggerConfig;
   ratelimit: RateLimitConfig;
   cors: CorsConfig;
+  views: ViewsConfig;
 }>;
 
 export type Methods = "get" | "post" | "put" | "delete" | "patch";
