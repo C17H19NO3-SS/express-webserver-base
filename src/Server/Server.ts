@@ -30,6 +30,10 @@ import type { OpenAPIV3 } from "openapi-types";
 import net from "node:net";
 import readline from "node:readline/promises";
 
+/**
+ * Express Web Server Base (EWB)
+ * A powerful, decorator-driven wrapper around Express.js featuring integrated Swagger, CORS, Rate Limit, and native Bun.build view engines.
+ */
 export class Server {
   public app: Express;
   public port: number;
@@ -40,6 +44,10 @@ export class Server {
   private swaggerPaths: Record<string, any> = {};
   private hasAuthRoutes: boolean = false;
 
+  /**
+   * Initializes a new Server instance.
+   * @param options Port number or a complete ServerOptions configuration object.
+   */
   constructor(options?: ServerOptions | number) {
     if (typeof options === "number") {
       this.options = { port: options };
@@ -85,6 +93,11 @@ export class Server {
       this.setPlugins(this.options.plugins);
   }
 
+  /**
+   * Configures Cross-Origin Resource Sharing (CORS).
+   * @param config A boolean to enable defaults or an Express cors configuration object.
+   * @returns The Server instance for method chaining.
+   */
   public setCors(config: CorsConfig = true): this {
     this.options.cors = config;
     if (config) {
@@ -94,6 +107,11 @@ export class Server {
     return this;
   }
 
+  /**
+   * Configures express rate limiting to prevent abuse and brute-force attacks.
+   * @param config A boolean to enable defaults or a partial express-rate-limit configuration object.
+   * @returns The Server instance for method chaining.
+   */
   public setRateLimit(config: RateLimitConfig = true): this {
     this.options.ratelimit = config;
     if (config) {
@@ -103,11 +121,23 @@ export class Server {
     return this;
   }
 
+  /**
+   * Integrates Bun plugins into the native view engine compiler.
+   * Ideal for tailwindcss, SCSS, SVG, or other asset processing utilities.
+   * @param plugins An array of active Bun plugins (e.g., `[tailwindcssPlugin]`).
+   * @returns The Server instance for method chaining.
+   */
   public setPlugins(plugins: ServerOptions["plugins"]): this {
     this.options.plugins = plugins;
     return this;
   }
 
+  /**
+   * Sets up a high-performance, live-compiling View Engine natively powered by `Bun.build`.
+   * When `res.render()` is called on HTML endpoints, it automatically bundles TS/React components.
+   * @param config Boolean or a Views option object specifying directory and cache paths.
+   * @returns The Server instance for method chaining.
+   */
   public setViews(config: ViewsConfig = true): this {
     this.options.views = config;
     if (config) {
@@ -163,11 +193,23 @@ export class Server {
     return this;
   }
 
+  /**
+   * Turns on automatic Swagger/OpenAPI documentation generation.
+   * Scans controllers for route parameters, endpoints, and Authorization requirements.
+   * @param config Boolean to use defaults, or detailed Swagger configuration.
+   * @returns The Server instance for method chaining.
+   */
   public setSwagger(config: SwaggerConfig = true): this {
     this.options.swagger = config;
     return this;
   }
 
+  /**
+   * Explicitly sets one or multiple paths to load Controller classes from.
+   * Defaults to `"./controllers"` relative to where the Server was constructed.
+   * @param directories A directory path string or array of paths.
+   * @returns The Server instance for method chaining.
+   */
   public setControllers(directories: string | string[]): this {
     this.controllersPaths = Array.isArray(directories)
       ? directories
@@ -365,6 +407,10 @@ export class Server {
     }
   }
 
+  /**
+   * Finalizes configuration and boots up the web server.
+   * It loads all designated controllers, attempts port binding, mounts endpoints, builds swagger, and launches the listener.
+   */
   public async init() {
     await this.loadControllers(this.controllersPaths);
 
