@@ -1,6 +1,6 @@
 {
   "name": "@synchjs/ewb",
-  "version": "1.0.13",
+  "version": "1.0.15",
   "description": "Express Web Server Base - A powerful, type-safe Express.js wrapper with integrated Swagger, CORS, Rate Limit, JWT and Decorators.",
   "main": "dist/index.cjs",
   "module": "dist/index.js",

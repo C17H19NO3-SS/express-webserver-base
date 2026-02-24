@@ -279,8 +279,8 @@ export class Server {
    * @param directories One or multiple directory paths to load controllers from.
    * @returns The Server instance for method chaining.
    */
-  public setControllers(...directories: string[]): this {
-    this.controllersPaths = directories;
+  public setControllers(...directories: (string | string[])[]): this {
+    this.controllersPaths = directories.flat() as string[];
     return this;
   }
 
