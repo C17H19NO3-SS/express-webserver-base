@@ -2,7 +2,7 @@ import React from "react";
 
 export const App = () => {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-indigo-950 flex flex-col items-center justify-center p-6 text-slate-200 antialiased font-sans">
+    <div className="min-h-screen bg-linear-to-br from-slate-900 via-slate-800 to-indigo-950 flex flex-col items-center justify-center p-6 text-slate-200 antialiased font-sans">
       {/* Animated Background Orbs */}
       <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none z-0">
         <div className="absolute -top-[20%] -left-[10%] w-[50%] h-[50%] rounded-full bg-indigo-600/20 blur-[120px] mix-blend-screen" />
@@ -12,7 +12,7 @@ export const App = () => {
       <div className="relative z-10 w-full max-w-2xl bg-slate-900/50 backdrop-blur-3xl border border-white/10 shadow-2xl rounded-3xl p-10 mt-10 transform transition-all hover:scale-[1.01] hover:shadow-indigo-500/10">
         {/* Header Section */}
         <div className="text-center mb-10 space-y-4">
-          <div className="inline-flex items-center justify-center p-3 rounded-2xl bg-gradient-to-br from-indigo-500/20 to-purple-500/20 border border-indigo-500/30 mb-2">
+          <div className="inline-flex items-center justify-center p-3 rounded-2xl bg-linear-to-br from-indigo-500/20 to-purple-500/20 border border-indigo-500/30 mb-2">
             <svg
               className="w-8 h-8 text-indigo-400"
               fill="none"
@@ -27,7 +27,7 @@ export const App = () => {
               />
             </svg>
           </div>
-          <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-indigo-300 via-white to-purple-300">
+          <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight text-transparent bg-clip-text bg-linear-to-r from-indigo-300 via-white to-purple-300">
             EWB + React + Bun
           </h1>
           <p className="text-sm sm:text-base text-slate-400 font-medium max-w-md mx-auto leading-relaxed">

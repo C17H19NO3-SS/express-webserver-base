@@ -11,6 +11,6 @@ const app = new Server(3000)
   .setViews({
     dir: "./example/views",
   })
-  .setPlugins([tailwindcssPlugin]);
+  .setViewPlugins(tailwindcssPlugin);
 
 app.init();

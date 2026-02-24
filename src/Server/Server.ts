@@ -90,7 +90,7 @@ export class Server {
       this.setControllers(this.options.controllers);
     if (this.options.views !== undefined) this.setViews(this.options.views);
     if (this.options.plugins !== undefined)
-      this.setPlugins(this.options.plugins);
+      this.setViewPlugins(...this.options.plugins);
   }
 
   /**
@@ -124,10 +124,12 @@ export class Server {
   /**
    * Integrates Bun plugins into the native view engine compiler.
    * Ideal for tailwindcss, SCSS, SVG, or other asset processing utilities.
-   * @param plugins An array of active Bun plugins (e.g., `[tailwindcssPlugin]`).
+   * @param plugins Active Bun plugins to register (e.g., `tailwindcssPlugin, scssPlugin`).
    * @returns The Server instance for method chaining.
    */
-  public setPlugins(plugins: ServerOptions["plugins"]): this {
+  public setViewPlugins(
+    ...plugins: NonNullable<ServerOptions["plugins"]>
+  ): this {
     this.options.plugins = plugins;
     return this;
   }
