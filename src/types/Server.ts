@@ -36,6 +36,7 @@ export type ViewsConfig =
       dir?: string;
       publicPath?: string;
       cacheDir?: string;
+      hmr?: boolean;
     };
 
 /**

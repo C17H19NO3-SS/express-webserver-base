@@ -43,6 +43,7 @@ export class Server {
   private controllersPaths: string[] = [];
   private swaggerPaths: Record<string, any> = {};
   private hasAuthRoutes: boolean = false;
+  private hmrClients: express.Response[] = [];
 
   /**
    * Initializes a new Server instance.
@@ -86,8 +87,13 @@ export class Server {
       this.setRateLimit(this.options.ratelimit);
     if (this.options.swagger !== undefined)
       this.setSwagger(this.options.swagger);
-    if (this.options.controllers !== undefined)
-      this.setControllers(this.options.controllers);
+    if (this.options.controllers !== undefined) {
+      if (Array.isArray(this.options.controllers)) {
+        this.setControllers(...this.options.controllers);
+      } else {
+        this.setControllers(this.options.controllers);
+      }
+    }
     if (this.options.views !== undefined) this.setViews(this.options.views);
     if (this.options.plugins !== undefined)
       this.setViewPlugins(...this.options.plugins);
@@ -149,14 +155,50 @@ export class Server {
       const cacheDir =
         viewsOptions.cacheDir || path.join(process.cwd(), ".ebw-build");
 
+      const hmrEnabled =
+        viewsOptions.hmr !== undefined
+          ? viewsOptions.hmr
+          : process.env.NODE_ENV !== "production";
+
       this.app.set("views", dir);
       this.app.set("view engine", "html");
       this.app.use(publicPath, express.static(cacheDir));
+
+      if (hmrEnabled) {
+        this.app.get("/_ebw_hmr", (req: Request, res: Response) => {
+          res.setHeader("Content-Type", "text/event-stream");
+          res.setHeader("Cache-Control", "no-cache");
+          res.setHeader("Connection", "keep-alive");
+          res.flushHeaders();
+
+          this.hmrClients.push(res);
+
+          req.on("close", () => {
+            this.hmrClients = this.hmrClients.filter((c) => c !== res);
+          });
+        });
+
+        if (fs.existsSync(dir)) {
+          let timeout: NodeJS.Timeout | null = null;
+          fs.watch(dir, { recursive: true }, (eventType, filename) => {
+            if (timeout) clearTimeout(timeout);
+            timeout = setTimeout(() => {
+              this.hmrClients.forEach((client) => {
+                client.write("data: reload\\n\\n");
+              });
+            }, 100);
+          });
+        }
+      }
 
       this.app.engine(
         "html",
         async (filePath: string, options: any, callback: any) => {
           try {
+            if (fs.existsSync(cacheDir)) {
+              await fs.promises.rm(cacheDir, { recursive: true, force: true });
+            }
+
             // @ts-ignore
             const buildResult = await Bun.build({
               entrypoints: [filePath],
@@ -184,7 +226,32 @@ export class Server {
               );
             }
 
-            const htmlText = await htmlOutput.text();
+            let htmlText = await htmlOutput.text();
+
+            if (hmrEnabled) {
+              const hmrScript = `
+                <script>
+                  (() => {
+                    const evtSource = new EventSource("/_ebw_hmr");
+                    evtSource.onmessage = (event) => {
+                      if (event.data === "reload") {
+                        console.log("[EWB] Change detected, reloading...");
+                        window.location.reload();
+                      }
+                    };
+                    evtSource.onerror = () => {
+                      console.log("[EWB] HMR connection lost, retrying...");
+                    };
+                  })();
+                </script>
+              `;
+              if (htmlText.includes("</body>")) {
+                htmlText = htmlText.replace("</body>", `${hmrScript}</body>`);
+              } else {
+                htmlText += hmrScript;
+              }
+            }
+
             callback(null, htmlText);
           } catch (err) {
             callback(err);
@@ -209,13 +276,11 @@ export class Server {
   /**
    * Explicitly sets one or multiple paths to load Controller classes from.
    * Defaults to `"./controllers"` relative to where the Server was constructed.
-   * @param directories A directory path string or array of paths.
+   * @param directories One or multiple directory paths to load controllers from.
    * @returns The Server instance for method chaining.
    */
-  public setControllers(directories: string | string[]): this {
-    this.controllersPaths = Array.isArray(directories)
-      ? directories
-      : [directories];
+  public setControllers(...directories: string[]): this {
+    this.controllersPaths = directories;
     return this;
   }
 
