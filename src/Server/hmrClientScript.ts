@@ -55,6 +55,21 @@ if (typeof window !== "undefined") {
         const parser = new DOMParser();
         const newDoc = parser.parseFromString(html, "text/html");
         
+        const errorRoot = newDoc.getElementById("ewb-error-root");
+        if (errorRoot) {
+           let existingOverlay = document.getElementById("ewb-error-root");
+           if (existingOverlay) {
+              existingOverlay.innerHTML = errorRoot.innerHTML;
+           } else {
+              document.body.appendChild(errorRoot.cloneNode(true));
+           }
+           console.error("[EWB] Build fails. See overlay for details.");
+           return;
+        } else {
+           const existingOverlay = document.getElementById("ewb-error-root");
+           if (existingOverlay) existingOverlay.remove();
+        }
+        
         const newStyles = Array.from(newDoc.querySelectorAll("link[rel='stylesheet']"));
         for (const s of newStyles) {
           const href = s.getAttribute("href")?.split("?")[0];

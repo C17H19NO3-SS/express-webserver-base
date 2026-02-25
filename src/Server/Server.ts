@@ -234,9 +234,22 @@ export class Server {
 
             if (!buildResult.success) {
               const errors = buildResult.logs
-                .map((l: any) => l.message)
+                .map((l: any) =>
+                  l.message.replace(/</g, "&lt;").replace(/>/g, "&gt;"),
+                )
                 .join("\\n");
-              return callback(new Error(`Bun.build failed:\\n${errors}`));
+
+              let errorHtml = `<!DOCTYPE html><html><head><title>Build Error</title><style>body{background:#1e1e2e;color:#f38ba8;font-family:monospace;padding:2rem;margin:0}pre{background:#181825;padding:1rem;border-radius:8px;overflow-x:auto;white-space:pre-wrap;word-wrap:break-word}.ewb-error-overlay{position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(30,30,46,0.95);z-index:99999;display:flex;flex-direction:column;padding:2rem;box-sizing:border-box;backdrop-filter:blur(5px)}</style></head><body><div id="ewb-error-root" class="ewb-error-overlay"><h1 style="margin-top:0">Build Failed</h1><pre>${errors}</pre><p style="color:#a6adc8;margin-bottom:0px;">Waiting for file changes to recover...</p></div></body></html>`;
+
+              if (hmrEnabled) {
+                const hmrScript = `<script src="/socket.io/socket.io.js"></script><script type="module" src="/_ebw_hmr.js"></script>`;
+                errorHtml = errorHtml.replace(
+                  "</body>",
+                  `${hmrScript}\n</body>`,
+                );
+              }
+
+              return callback(null, errorHtml);
             }
 
             const htmlOutput = buildResult.outputs.find(
