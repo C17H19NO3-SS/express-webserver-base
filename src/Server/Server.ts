@@ -234,22 +234,59 @@ export class Server {
                 },
               });
             } catch (buildErr: any) {
+              const logs = buildErr.errors ||
+                buildErr.logs || [
+                  {
+                    message:
+                      buildErr?.message ||
+                      buildErr?.toString() ||
+                      "Unknown build error",
+                  },
+                ];
               buildResult = {
                 success: false,
-                logs: buildErr.errors || [
-                  { message: buildErr.message || buildErr.toString() },
-                ],
+                logs: logs,
               };
             }
 
             if (!buildResult.success) {
               const errors = buildResult.logs
                 .map((l: any) =>
-                  l.message.replace(/</g, "&lt;").replace(/>/g, "&gt;"),
+                  l?.message?.replace(/</g, "&lt;")?.replace(/>/g, "&gt;"),
                 )
                 .join("\\n");
 
-              let errorHtml = `<!DOCTYPE html><html><head><title>Build Error</title><style>body{background:#1e1e2e;color:#f38ba8;font-family:monospace;padding:2rem;margin:0}pre{background:#181825;padding:1rem;border-radius:8px;overflow-x:auto;white-space:pre-wrap;word-wrap:break-word}.ewb-error-overlay{position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(30,30,46,0.95);z-index:99999;display:flex;flex-direction:column;padding:2rem;box-sizing:border-box;backdrop-filter:blur(5px)}</style></head><body><div id="ewb-error-root" class="ewb-error-overlay"><h1 style="margin-top:0">Build Failed</h1><pre>${errors}</pre><p style="color:#a6adc8;margin-bottom:0px;">Waiting for file changes to recover...</p></div></body></html>`;
+              let errorHtml = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>EWB Build Error</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 text-gray-100 flex items-center justify-center min-h-screen p-4">
+  <div id="ewb-error-root" class="fixed inset-0 z-50 flex items-center justify-center bg-gray-950/80 backdrop-blur-sm p-4 w-full h-full">
+    <div class="bg-gray-900 border border-red-500/30 shadow-2xl shadow-red-500/10 rounded-xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden ring-1 ring-white/10">
+      <div class="px-6 py-4 border-b border-white/5 flex items-center gap-3 bg-red-500/10">
+        <svg class="w-6 h-6 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+        <h1 class="text-lg font-semibold text-red-400">Build Compilation Failed</h1>
+      </div>
+      <div class="p-6 overflow-y-auto bg-[#0d1117] flex-1">
+        <pre class="text-sm font-mono text-red-300 whitespace-pre-wrap break-words leading-relaxed"><code>${errors}</code></pre>
+      </div>
+      <div class="px-6 py-4 bg-gray-900 border-t border-white/5 flex items-center justify-between">
+        <p class="text-sm text-gray-400 flex items-center gap-2">
+          <span class="relative flex h-3 w-3">
+            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+            <span class="relative inline-flex rounded-full h-3 w-3 bg-blue-500"></span>
+          </span>
+          Waiting for file changes to recover...
+        </p>
+        <span class="text-xs text-gray-500 font-medium">Express Web Server Base (EWB)</span>
+      </div>
+    </div>
+  </div>
+</body>
+</html>`;
 
               if (hmrEnabled) {
                 const hmrScript = `<script src="/socket.io/socket.io.js"></script><script type="module" src="/_ebw_hmr.js"></script>`;
