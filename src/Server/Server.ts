@@ -31,6 +31,7 @@ import net from "node:net";
 import http from "node:http";
 import readline from "node:readline/promises";
 import { Server as SocketIOServer } from "socket.io";
+import { hmrClientScript } from "./hmrClientScript";
 
 /**
  * Express Web Server Base (EWB)
@@ -245,109 +246,10 @@ export class Server {
             let htmlText = await htmlOutput.text();
 
             if (hmrEnabled) {
-              const hmrScript = `
-                <script src="/socket.io/socket.io.js"></script>
-                <script>
-                  if (typeof window !== "undefined") {
-                    window.__EWB_HMR__ = {
-                      data: {},
-                      _listeners: {},
-                      _dispose: [],
-                      _prune: [],
-                      accept: (cb) => { 
-                        if (cb) window.__EWB_HMR__.on("bun:afterUpdate", () => cb()); 
-                      },
-                      dispose: (cb) => { window.__EWB_HMR__._dispose.push(cb); },
-                      prune: (cb) => { window.__EWB_HMR__._prune.push(cb); },
-                      decline: () => {},
-                      invalidate: () => window.location.reload(),
-                      on: (event, cb) => {
-                        if (!window.__EWB_HMR__._listeners[event]) window.__EWB_HMR__._listeners[event] = [];
-                        window.__EWB_HMR__._listeners[event].push(cb);
-                      },
-                      off: (event, cb) => {
-                        if (window.__EWB_HMR__._listeners[event]) {
-                          window.__EWB_HMR__._listeners[event] = window.__EWB_HMR__._listeners[event].filter(f => f !== cb);
-                        }
-                      },
-                      _emit: async (event, data) => {
-                        if (window.__EWB_HMR__._listeners[event]) {
-                          for (const cb of window.__EWB_HMR__._listeners[event]) await cb(data);
-                        }
-                      }
-                    };
+              const hmrScript = `<script src="/socket.io/socket.io.js"></script><script>${hmrClientScript}</script>`;
 
-                    if (window.io) {
-                      const socket = window.io();
-                      socket.on("connect", () => {
-                        console.log("[EWB] HMR connected via Socket.IO");
-                        window.__EWB_HMR__._emit("bun:ws:connect");
-                      });
-                      socket.on("disconnect", () => {
-                        console.log("[EWB] HMR disconnected");
-                        window.__EWB_HMR__._emit("bun:ws:disconnect");
-                      });
-                      socket.on("hmr:reload", async () => {
-                        console.log("[EWB] Change detected, fetching updates...");
-                        try {
-                          await window.__EWB_HMR__._emit("bun:beforeUpdate");
-                          for (const cb of window.__EWB_HMR__._dispose) await cb();
-                          
-                          const currentUrl = new URL(window.location.href);
-                          currentUrl.searchParams.set("_hmr", Date.now().toString());
-                          const res = await fetch(currentUrl.toString());
-                          if (!res.ok) throw new Error("Fetch failed");
-                          const html = await res.text();
-                          const parser = new DOMParser();
-                          const newDoc = parser.parseFromString(html, "text/html");
-                          
-                          const newStyles = Array.from(newDoc.querySelectorAll("link[rel='stylesheet'], style"));
-                          const oldStyles = Array.from(document.querySelectorAll("link[rel='stylesheet'], style"));
-                          oldStyles.forEach((s) => s.remove());
-                          newStyles.forEach((s) => {
-                            if (s.tagName === "LINK") {
-                              const href = s.getAttribute("href");
-                              if (href) s.setAttribute("href", href + (href.includes("?") ? "&" : "?") + "_hmr=" + Date.now());
-                            }
-                            document.head.appendChild(s.cloneNode(true));
-                          });
-                          
-                          document.body.innerHTML = newDoc.body.innerHTML;
-                          const scripts = Array.from(document.body.querySelectorAll("script"));
-                          for (const oldScript of scripts) {
-                            if (oldScript.src && oldScript.src.includes("/socket.io/")) continue;
-                            if (oldScript.innerHTML.includes("window.__EWB_HMR__")) continue;
-                            const newScript = document.createElement("script");
-                            Array.from(oldScript.attributes).forEach((attr) => {
-                              if (attr.name === "src") {
-                                 newScript.setAttribute(attr.name, attr.value + (attr.value.includes("?") ? "&" : "?") + "_hmr=" + Date.now());
-                              } else {
-                                 newScript.setAttribute(attr.name, attr.value);
-                              }
-                            });
-                            newScript.text = oldScript.text;
-                            if (oldScript.parentNode) {
-                              oldScript.parentNode.replaceChild(newScript, oldScript);
-                            }
-                          }
-
-                          await window.__EWB_HMR__._emit("bun:afterUpdate");
-                        } catch (err) {
-                          console.error("[EWB] HMR Update failed, falling back to full context reload", err);
-                          await window.__EWB_HMR__._emit("bun:beforeFullReload");
-                          await window.__EWB_HMR__._emit("bun:error", err);
-                          window.location.reload();
-                        }
-                      });
-                    }
-                  }
-                </script>
-              `;
               if (htmlText.includes("</body>")) {
-                htmlText = htmlText.replace(
-                  "</body>",
-                  `${hmrScript}\\n</body>`,
-                );
+                htmlText = htmlText.replace("</body>", `${hmrScript}\n</body>`);
               } else {
                 htmlText += hmrScript;
               }
