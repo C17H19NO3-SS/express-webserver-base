@@ -47,6 +47,8 @@ export class Server {
   private controllersPaths: string[] = [];
   private swaggerPaths: Record<string, any> = {};
   private hasAuthRoutes: boolean = false;
+  private hmrClients: express.Response[] = [];
+  private isBuildingViews: boolean = false;
 
   /**
    * Initializes a new Server instance.
@@ -197,6 +199,12 @@ export class Server {
       this.app.engine(
         "html",
         async (filePath: string, options: any, callback: any) => {
+          while (this.isBuildingViews) {
+            await new Promise((r) => setTimeout(r, 50));
+          }
+
+          this.isBuildingViews = true;
+
           try {
             if (fs.existsSync(cacheDir)) {
               await fs.promises.rm(cacheDir, { recursive: true, force: true });
@@ -300,6 +308,8 @@ export class Server {
             callback(null, htmlText);
           } catch (err) {
             callback(err);
+          } finally {
+            this.isBuildingViews = false;
           }
         },
       );
