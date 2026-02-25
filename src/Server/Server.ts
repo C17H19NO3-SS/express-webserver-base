@@ -216,21 +216,31 @@ export class Server {
               await fs.promises.rm(cacheDir, { recursive: true, force: true });
             }
 
-            // @ts-ignore
-            const buildResult = await Bun.build({
-              entrypoints: [filePath],
-              outdir: cacheDir,
-              publicPath: publicPath,
-              target: "browser",
-              format: "esm",
-              minify: process.env.NODE_ENV === "production",
-              plugins: this.options.plugins || [],
-              define: {
-                "import.meta.hot": hmrEnabled
-                  ? "window.__EWB_HMR__"
-                  : "undefined",
-              },
-            });
+            let buildResult: any;
+            try {
+              // @ts-ignore
+              buildResult = await Bun.build({
+                entrypoints: [filePath],
+                outdir: cacheDir,
+                publicPath: publicPath,
+                target: "browser",
+                format: "esm",
+                minify: process.env.NODE_ENV === "production",
+                plugins: this.options.plugins || [],
+                define: {
+                  "import.meta.hot": hmrEnabled
+                    ? "window.__EWB_HMR__"
+                    : "undefined",
+                },
+              });
+            } catch (buildErr: any) {
+              buildResult = {
+                success: false,
+                logs: buildErr.errors || [
+                  { message: buildErr.message || buildErr.toString() },
+                ],
+              };
+            }
 
             if (!buildResult.success) {
               const errors = buildResult.logs
