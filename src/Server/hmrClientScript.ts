@@ -5,6 +5,7 @@ if (typeof window !== "undefined") {
     _listeners: {},
     _dispose: [],
     _prune: [],
+    _assetHashes: {},
     accept: (cb) => { 
       if (cb) window.__EWB_HMR__.on("bun:afterUpdate", () => cb()); 
     },
@@ -44,8 +45,6 @@ if (typeof window !== "undefined") {
       console.log("[EWB] Change detected, fetching updates...");
       try {
         await window.__EWB_HMR__._emit("bun:beforeUpdate");
-        for (const cb of window.__EWB_HMR__._dispose) await cb();
-        window.__EWB_HMR__._dispose = [];
         
         const currentUrl = new URL(window.location.href);
         currentUrl.searchParams.set("_hmr", Date.now().toString());
@@ -56,33 +55,58 @@ if (typeof window !== "undefined") {
         const parser = new DOMParser();
         const newDoc = parser.parseFromString(html, "text/html");
         
-        const newStyles = Array.from(newDoc.querySelectorAll("link[rel='stylesheet'], style"));
-        const oldStyles = Array.from(document.querySelectorAll("link[rel='stylesheet'], style"));
-        oldStyles.forEach((s) => s.remove());
-        newStyles.forEach((s) => {
-          if (s.tagName === "LINK") {
-            const href = s.getAttribute("href");
-            if (href) s.setAttribute("href", href + (href.includes("?") ? "&" : "?") + "_hmr=" + Date.now());
+        const newStyles = Array.from(newDoc.querySelectorAll("link[rel='stylesheet']"));
+        for (const s of newStyles) {
+          const href = s.getAttribute("href")?.split("?")[0];
+          if (!href) continue;
+          
+          const cacheUrl = href + (href.includes("?") ? "&" : "?") + "_hmr=" + Date.now();
+          const cssRes = await fetch(cacheUrl);
+          const cssText = await cssRes.text();
+          
+          if (window.__EWB_HMR__._assetHashes[href] !== cssText) {
+             window.__EWB_HMR__._assetHashes[href] = cssText;
+             
+             const existing = document.querySelector(\`link[rel='stylesheet'][href^='\${href}']\`);
+             const newLink = document.createElement("link");
+             newLink.rel = "stylesheet";
+             newLink.href = cacheUrl;
+             
+             if (existing) {
+               existing.parentNode.replaceChild(newLink, existing);
+             } else {
+               document.head.appendChild(newLink);
+             }
           }
-          document.head.appendChild(s.cloneNode(true));
-        });
+        }
         
         const scripts = Array.from(newDoc.querySelectorAll("script[type='module'][src]"));
         let updated = false;
         
         for (const script of scripts) {
-          const src = script.getAttribute("src");
-          if (src && !src.includes("/socket.io/")) {
-            const importUrl = src + (src.includes("?") ? "&" : "?") + "_hmr=" + Date.now();
-            await import(importUrl);
-            updated = true;
+          const src = script.getAttribute("src")?.split("?")[0];
+          if (src && !src.includes("/socket.io/") && !src.includes("/_ebw_hmr.js")) {
+            const cacheUrl = src + (src.includes("?") ? "&" : "?") + "_hmr=" + Date.now();
+            const jsRes = await fetch(cacheUrl);
+            const jsText = await jsRes.text();
+            
+            if (window.__EWB_HMR__._assetHashes[src] !== jsText) {
+              window.__EWB_HMR__._assetHashes[src] = jsText;
+              
+              for (const cb of window.__EWB_HMR__._dispose) await cb();
+              window.__EWB_HMR__._dispose = [];
+              
+              await import(cacheUrl);
+              updated = true;
+            }
           }
         }
         
-        if (!updated) {
-          window.location.reload();
-        } else {
+        if (updated) {
           await window.__EWB_HMR__._emit("bun:afterUpdate");
+        } else {
+          for (const cb of window.__EWB_HMR__._dispose) await cb();
+          window.__EWB_HMR__._dispose = [];
         }
       } catch (err) {
         console.error("[EWB] HMR Update failed, falling back to full context reload", err);

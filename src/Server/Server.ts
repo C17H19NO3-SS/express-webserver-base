@@ -178,6 +178,11 @@ export class Server {
       this.app.use(publicPath, express.static(cacheDir));
 
       if (hmrEnabled) {
+        this.app.get("/_ebw_hmr.js", (req: Request, res: Response) => {
+          res.setHeader("Content-Type", "application/javascript");
+          res.send(hmrClientScript);
+        });
+
         if (!this.io) {
           const ioOpts =
             typeof this.options.socketio === "object"
@@ -246,7 +251,7 @@ export class Server {
             let htmlText = await htmlOutput.text();
 
             if (hmrEnabled) {
-              const hmrScript = `<script src="/socket.io/socket.io.js"></script><script>${hmrClientScript}</script>`;
+              const hmrScript = `<script src="/socket.io/socket.io.js"></script><script type="module" src="/_ebw_hmr.js"></script>`;
 
               if (htmlText.includes("</body>")) {
                 htmlText = htmlText.replace("</body>", `${hmrScript}\n</body>`);
