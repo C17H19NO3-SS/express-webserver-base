@@ -184,6 +184,44 @@ export class Server {
           res.send(hmrClientScript);
         });
 
+        this.app.get(
+          "/_ebw_error_overlay.js",
+          async (req: Request, res: Response) => {
+            try {
+              // Try resolving the TSX file from src/Client (dev and published npm package handles this).
+              let fileLoc = path.join(__dirname, "../Client/ErrorOverlay.tsx");
+              if (!fs.existsSync(fileLoc)) {
+                // If __dirname is inside "dist", go up and into src
+                fileLoc = path.join(
+                  __dirname,
+                  "../src/Client/ErrorOverlay.tsx",
+                );
+              }
+              const result = await Bun.build({
+                entrypoints: [fileLoc],
+                target: "browser",
+                format: "esm",
+                define: {
+                  "process.env.NODE_ENV": '"development"',
+                },
+              });
+              if (!result.success || !result.outputs || !result.outputs[0]) {
+                throw new Error("Empty build outputs for ErrorOverlay");
+              }
+              res.setHeader("Content-Type", "application/javascript");
+              res.send(await result.outputs[0].text());
+            } catch (e: any) {
+              res
+                .status(500)
+                .send(
+                  "console.error('Error overlay builder failed: " +
+                    e.message +
+                    "')",
+                );
+            }
+          },
+        );
+
         if (!this.io) {
           const ioOpts =
             typeof this.options.socketio === "object"
