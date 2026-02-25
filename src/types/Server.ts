@@ -40,11 +40,17 @@ export type ViewsConfig =
     };
 
 /**
+ * Configuration for Socket.IO integration.
+ */
+export type SocketIOConfig = boolean | import("socket.io").ServerOptions;
+
+/**
  * Core initialization options for the Express Web Server Base (EWB).
  * Used when initializing a new `Server` instance.
  */
 export type ServerOptions = Partial<{
   port: number;
+  socketio: SocketIOConfig;
   controllers: string | string[];
   swagger: SwaggerConfig;
   ratelimit: RateLimitConfig;

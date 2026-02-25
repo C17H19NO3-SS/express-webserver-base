@@ -28,7 +28,9 @@ import { AUTH_REQUIRED_METADATA_KEY } from "../Decorations/AuthRequired";
 import jwt from "jsonwebtoken";
 import type { OpenAPIV3 } from "openapi-types";
 import net from "node:net";
+import http from "node:http";
 import readline from "node:readline/promises";
+import { Server as SocketIOServer } from "socket.io";
 
 /**
  * Express Web Server Base (EWB)
@@ -37,13 +39,14 @@ import readline from "node:readline/promises";
 export class Server {
   public app: Express;
   public port: number;
+  public httpServer: http.Server;
+  public io?: SocketIOServer;
   private options: ServerOptions;
   private controllerCount: number = 0;
   private routeCount: number = 0;
   private controllersPaths: string[] = [];
   private swaggerPaths: Record<string, any> = {};
   private hasAuthRoutes: boolean = false;
-  private hmrClients: express.Response[] = [];
 
   /**
    * Initializes a new Server instance.
@@ -57,7 +60,14 @@ export class Server {
     }
 
     this.app = express();
+    this.httpServer = http.createServer(this.app);
     this.port = this.options.port !== undefined ? this.options.port : 3000;
+
+    if (this.options.socketio) {
+      const ioOpts =
+        typeof this.options.socketio === "object" ? this.options.socketio : {};
+      this.io = new SocketIOServer(this.httpServer, ioOpts);
+    }
 
     const old = Error.prepareStackTrace;
     Error.prepareStackTrace = (_, stack) => stack;
@@ -165,27 +175,20 @@ export class Server {
       this.app.use(publicPath, express.static(cacheDir));
 
       if (hmrEnabled) {
-        this.app.get("/_ebw_hmr", (req: Request, res: Response) => {
-          res.setHeader("Content-Type", "text/event-stream");
-          res.setHeader("Cache-Control", "no-cache");
-          res.setHeader("Connection", "keep-alive");
-          res.flushHeaders();
-
-          this.hmrClients.push(res);
-
-          req.on("close", () => {
-            this.hmrClients = this.hmrClients.filter((c) => c !== res);
-          });
-        });
+        if (!this.io) {
+          const ioOpts =
+            typeof this.options.socketio === "object"
+              ? this.options.socketio
+              : {};
+          this.io = new SocketIOServer(this.httpServer, ioOpts);
+        }
 
         if (fs.existsSync(dir)) {
           let timeout: NodeJS.Timeout | null = null;
           fs.watch(dir, { recursive: true }, (eventType, filename) => {
             if (timeout) clearTimeout(timeout);
             timeout = setTimeout(() => {
-              this.hmrClients.forEach((client) => {
-                client.write("data: reload\\n\\n");
-              });
+              this.io?.emit("hmr:reload");
             }, 100);
           });
         }
@@ -230,23 +233,15 @@ export class Server {
 
             if (hmrEnabled) {
               const hmrScript = `
-                <script>
-                  (() => {
-                    const evtSource = new EventSource("/_ebw_hmr");
-                    evtSource.onmessage = (event) => {
-                      if (event.data === "reload") {
-                        console.log("[EWB] Change detected, reloading...");
-                        window.location.reload();
-                      }
-                    };
-                    evtSource.onerror = () => {
-                      console.log("[EWB] HMR connection lost, retrying...");
-                    };
-                  })();
+                <script type="module">
+                  import "@synchjs/ewb/hmr";
                 </script>
               `;
               if (htmlText.includes("</body>")) {
-                htmlText = htmlText.replace("</body>", `${hmrScript}</body>`);
+                htmlText = htmlText.replace(
+                  "</body>",
+                  `${hmrScript}\\n</body>`,
+                );
               } else {
                 htmlText += hmrScript;
               }
@@ -532,7 +527,7 @@ export class Server {
       );
     }
 
-    const server = this.app.listen(this.port, () => {
+    const server = this.httpServer.listen(this.port, () => {
       const address = server.address();
       const actualPort =
         typeof address === "object" && address !== null
